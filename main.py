@@ -17,6 +17,13 @@ import urllib.request
 import holidays as holidays_lib
 import statistics
 
+# --- Cloud Database Imports ---
+try:
+    from google.cloud import firestore
+    from google.oauth2 import service_account
+except ImportError:
+    firestore = None
+
 # --- Translation Dictionary ---
 LANG_TEXT = {
     "English": {
@@ -211,11 +218,37 @@ USER_DB_FILE = "users_db.json"
 DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 DAYS_TR = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
 
+def get_firestore_db():
+    """Initialize Firestore Client from Streamlit Secrets"""
+    if firestore is None:
+        return None
+    
+    if "firebase" in st.secrets:
+        try:
+            # Construct credentials from secrets dictionary
+            key_dict = dict(st.secrets["firebase"])
+            creds = service_account.Credentials.from_service_account_info(key_dict)
+            db = firestore.Client(credentials=creds, project=key_dict["project_id"])
+            return db
+        except Exception as e:
+            st.error(f"Firebase Connection Error: {e}")
+            return None
+    return None
+
 def get_user_db_path(username):
     safe_user = "".join([c for c in username if c.isalnum() or c in ('-', '_')])
     return f"personnel_db_{safe_user}.json"
 
 def load_db(username):
+    # 1. Try Cloud Database
+    db = get_firestore_db()
+    if db:
+        doc = db.collection("personnel_data").document(username).get()
+        if doc.exists:
+            return doc.to_dict()
+        return {"personnel": []}
+
+    # 2. Fallback to Local JSON
     path = get_user_db_path(username)
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -227,6 +260,7 @@ def load_db(username):
     return {"personnel": []}
 
 def save_db(personnel, username):
+    # Prepare full state data
     path = get_user_db_path(username)
     
     # Save full project state
@@ -244,6 +278,13 @@ def save_db(personnel, username):
         "cfg_two_rest": st.session_state.get("cfg_two_rest")
     }
     
+    # 1. Try Cloud Database
+    db = get_firestore_db()
+    if db:
+        db.collection("personnel_data").document(username).set(state_data)
+        return
+
+    # 2. Fallback to Local JSON
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state_data, f, ensure_ascii=False, indent=4)
 
@@ -266,7 +307,15 @@ def check_hashes(password, hashed_text):
     return False
 
 def authenticate(username, password):
-    # 1. Check Local DB (Hashed passwords)
+    # 1. Check Cloud DB
+    db = get_firestore_db()
+    if db:
+        doc = db.collection("users").document(username).get()
+        if doc.exists:
+            stored_hash = doc.to_dict().get("password_hash")
+            return check_hashes(password, stored_hash)
+    
+    # 2. Check Local DB (Hashed passwords)
     users = load_users()
     if username in users and check_hashes(password, users[username]):
         return True
@@ -308,13 +357,24 @@ def login_page():
         new_user = st.text_input(t["username"], key="reg_user")
         new_pass = st.text_input(t["password"], type='password', key="reg_pass")
         if st.button(t["register_btn"]):
-            users = load_users()
-            if new_user in users:
-                st.error(t["user_exists"])
+            # 1. Cloud Registration
+            db = get_firestore_db()
+            if db:
+                doc_ref = db.collection("users").document(new_user)
+                if doc_ref.get().exists:
+                    st.error(t["user_exists"])
+                else:
+                    doc_ref.set({"password_hash": make_hashes(new_pass)})
+                    st.success(t["reg_success"])
             else:
-                users[new_user] = make_hashes(new_pass)
-                save_users(users)
-                st.success(t["reg_success"])
+                # 2. Local Registration
+                users = load_users()
+                if new_user in users:
+                    st.error(t["user_exists"])
+                else:
+                    users[new_user] = make_hashes(new_pass)
+                    save_users(users)
+                    st.success(t["reg_success"])
 
 def get_calendar_html(year, month, schedule, t):
     cal = calendar.monthcalendar(year, month)

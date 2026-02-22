@@ -25,16 +25,19 @@ class DutyScheduler:
 
     def check_constraints(self, person, current_date, current_team):
         # 1. Max Duties Total
-        # If fixed_duties is set (>0), use it as the limit. Otherwise use max_duties.
-        fixed = person.get('fixed_duties', 0)
-        limit = fixed if fixed > 0 else person['max_duties']
+        # If fixed_duties_total is set (>0), use it as the limit. Otherwise use max_duties.
+        fixed_total = person.get('fixed_duties_total', 0)
+        limit_total = fixed_total if fixed_total > 0 else person['max_duties']
         
-        if person['duty_count'] >= limit:
+        if person['duty_count'] >= limit_total:
             return False
 
         # 2. Max Weekend Duties
         if self.is_weekend(current_date):
-            if person['weekend_duty_count'] >= person['max_weekends']:
+            fixed_wknd = person.get('fixed_duties_weekend', 0)
+            limit_wknd = fixed_wknd if fixed_wknd > 0 else person['max_weekends']
+            
+            if person['weekend_duty_count'] >= limit_wknd:
                 return False
 
         # 3. Consecutive Days (Yesterday)
@@ -176,8 +179,21 @@ class DutyScheduler:
                 random.shuffle(candidates)
                 
                 # Prioritize people who have a fixed duty target and haven't reached it yet
-                # Sort key: 0 = High Priority (Has fixed target > current), 1 = Normal
-                candidates.sort(key=lambda p: 0 if (p.get('fixed_duties', 0) > 0 and p['duty_count'] < p.get('fixed_duties', 0)) else 1)
+                def get_sort_key(p):
+                    # Priority 0: Needs weekend duty on a weekend
+                    if self.is_weekend(current_date):
+                        f_wknd = p.get('fixed_duties_weekend', 0)
+                        if f_wknd > 0 and p['weekend_duty_count'] < f_wknd:
+                            return 0
+                    
+                    # Priority 1: Needs total duty
+                    f_total = p.get('fixed_duties_total', 0)
+                    if f_total > 0 and p['duty_count'] < f_total:
+                        return 1
+                        
+                    return 2
+                
+                candidates.sort(key=get_sort_key)
                 
                 # 2. Fill remaining spots
                 for person in candidates:

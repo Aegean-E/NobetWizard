@@ -32,8 +32,10 @@ LANG_TEXT = {
         "name": "Name",
         "gender": "Gender",
         "max_duties": "Max Duties",
-        "fixed_duties": "Fixed Duties",
-        "fixed_duties_help": "Target number of duties. Overrides Max if > 0.",
+        "fixed_total": "Fixed Total",
+        "fixed_total_help": "Target total duties. Overrides Max if > 0.",
+        "fixed_wknd": "Fixed Wknd",
+        "fixed_wknd_help": "Target weekend duties. Overrides Max Wknd if > 0.",
         "max_wknd": "Max Wknd",
         "mixed_ok": "Mixed OK?",
         "mixed_ok_help": "Uncheck if person cannot work in mixed-gender teams",
@@ -47,6 +49,7 @@ LANG_TEXT = {
         "loaded": "Loaded!",
         "save_db": "💾 Save to DB",
         "db_saved": "Database saved to user profile!",
+        "download_db": "📥 Download DB",
         "clear_all": "🗑️ Clear All",
         "info_start": "Please add personnel to start.",
         "header_gen": "Generate Schedule",
@@ -105,8 +108,10 @@ LANG_TEXT = {
         "name": "İsim",
         "gender": "Cinsiyet",
         "max_duties": "Maks Nöbet",
-        "fixed_duties": "Sabit Sayı",
-        "fixed_duties_help": "Hedef nöbet sayısı. >0 ise Maks yerine geçer.",
+        "fixed_total": "Sabit Toplam",
+        "fixed_total_help": "Hedef toplam nöbet. >0 ise Maks yerine geçer.",
+        "fixed_wknd": "Sabit H.Sonu",
+        "fixed_wknd_help": "Hedef hafta sonu nöbet. >0 ise Maks H.Sonu yerine geçer.",
         "max_wknd": "Maks H.Sonu",
         "mixed_ok": "Karma Olur?",
         "mixed_ok_help": "Kişi karma ekiplerde çalışamıyorsa işareti kaldırın",
@@ -120,6 +125,7 @@ LANG_TEXT = {
         "loaded": "Yüklendi!",
         "save_db": "💾 DB Kaydet",
         "db_saved": "Veritabanı kullanıcı profiline kaydedildi!",
+        "download_db": "📥 DB İndir",
         "clear_all": "🗑️ Temizle",
         "info_start": "Başlamak için personel ekleyin.",
         "header_gen": "Takvim Oluştur",
@@ -346,18 +352,20 @@ def main():
 
     # Form to add new person
     with st.expander(t["add_expander"], expanded=True):
-        c1, c2, c3, c4, c5, c6 = st.columns([3, 1, 1, 1, 1, 1])
+        c1, c2, c3, c4, c5, c6, c7 = st.columns([3, 1, 1, 1, 1, 1, 1])
         with c1:
             name = st.text_input(t["name"])
         with c2:
             gender = st.selectbox(t["gender"], ["M", "F"])
         with c3:
-            fixed_duties = st.number_input(t["fixed_duties"], min_value=0, value=0, help=t["fixed_duties_help"])
+            fixed_total = st.number_input(t["fixed_total"], min_value=0, value=0, help=t["fixed_total_help"])
         with c4:
             max_duties = st.number_input(t["max_duties"], min_value=0, value=5)
         with c5:
-            max_weekends = st.number_input(t["max_wknd"], min_value=0, value=2)
+            fixed_wknd = st.number_input(t["fixed_wknd"], min_value=0, value=0, help=t["fixed_wknd_help"])
         with c6:
+            max_weekends = st.number_input(t["max_wknd"], min_value=0, value=2)
+        with c7:
             mixed_ok = st.checkbox(t["mixed_ok"], value=True, help=t["mixed_ok_help"])
         
         c_row2_1, c_row2_2, c_row2_3 = st.columns([1, 1, 1])
@@ -376,7 +384,8 @@ def main():
             st.session_state.personnel.append({
                 "name": name,
                 "gender": gender,
-                "fixed_duties": fixed_duties,
+                "fixed_duties_total": fixed_total,
+                "fixed_duties_weekend": fixed_wknd,
                 "max_duties": max_duties,
                 "max_weekends": max_weekends,
                 "mixed_gender_allowed": mixed_ok,
@@ -395,8 +404,13 @@ def main():
         # Ensure columns exist
         if "mixed_gender_allowed" not in df_personnel.columns:
             df_personnel["mixed_gender_allowed"] = True
-        if "fixed_duties" not in df_personnel.columns:
-            df_personnel["fixed_duties"] = 0
+        if "fixed_duties_total" not in df_personnel.columns:
+            # Migration: Use old fixed_duties if available, else 0
+            df_personnel["fixed_duties_total"] = df_personnel.get("fixed_duties", 0)
+            
+        if "fixed_duties_weekend" not in df_personnel.columns:
+            df_personnel["fixed_duties_weekend"] = 0
+            
         if "duty_count" not in df_personnel.columns:
             df_personnel["duty_count"] = 0
         if "busy_days" not in df_personnel.columns:
@@ -408,11 +422,12 @@ def main():
             
         # Editable Dataframe
         edited_df = st.data_editor(
-            df_personnel[["name", "gender", "fixed_duties", "max_duties", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "fixed_dates", "duty_count"]],
+            df_personnel[["name", "gender", "fixed_duties_total", "max_duties", "fixed_duties_weekend", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "fixed_dates", "duty_count"]],
             column_config={
                 "name": t["name"],
                 "gender": st.column_config.SelectboxColumn(t["gender"], options=["M", "F"], required=True),
-                "fixed_duties": st.column_config.NumberColumn(t["fixed_duties"], min_value=0, step=1, help=t["fixed_duties_help"]),
+                "fixed_duties_total": st.column_config.NumberColumn(t["fixed_total"], min_value=0, step=1, help=t["fixed_total_help"]),
+                "fixed_duties_weekend": st.column_config.NumberColumn(t["fixed_wknd"], min_value=0, step=1, help=t["fixed_wknd_help"]),
                 "max_duties": st.column_config.NumberColumn(t["max_duties"], min_value=0, step=1),
                 "max_weekends": st.column_config.NumberColumn(t["max_wknd"], min_value=0, step=1),
                 "mixed_gender_allowed": st.column_config.CheckboxColumn(t["mixed_ok"]),
@@ -431,7 +446,7 @@ def main():
 
         # --- Save / Load Section ---
         st.divider()
-        c_dl, c_db, c_ul, c_cl = st.columns([1, 1, 2, 1])
+        c_dl, c_db, c_json, c_ul, c_cl = st.columns([1, 1, 1, 2, 1])
         
         with c_dl:
             csv = edited_df.to_csv(index=False).encode('utf-8')
@@ -441,6 +456,15 @@ def main():
             if st.button(t["save_db"]):
                 save_db(st.session_state.personnel, st.session_state.get('username'))
                 st.success(t["db_saved"])
+
+        with c_json:
+            json_data = json.dumps(st.session_state.personnel, ensure_ascii=False, indent=4)
+            st.download_button(
+                label=t["download_db"],
+                data=json_data,
+                file_name="personnel_db.json",
+                mime="application/json"
+            )
 
         with c_ul:
             uploaded_file = st.file_uploader(t["load_csv"], type="csv", label_visibility="collapsed")
@@ -534,21 +558,26 @@ def main():
             
             # 1. Excel Export
             buffer_excel = BytesIO()
-            with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                df_res.to_excel(writer, index=False, sheet_name='Schedule')
-                # Adjust column widths
-                worksheet = writer.sheets['Schedule']
-                for column_cells in worksheet.columns:
-                    length = max(len(str(cell.value)) for cell in column_cells)
-                    worksheet.column_dimensions[column_cells[0].column_letter].width = length + 2
-            
-            with c_ex1:
-                st.download_button(
-                    label=t["export_excel"],
-                    data=buffer_excel.getvalue(),
-                    file_name=f"nobet_list_{year}_{month}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+            try:
+                with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+                    df_res.to_excel(writer, index=False, sheet_name='Schedule')
+                    # Adjust column widths
+                    worksheet = writer.sheets['Schedule']
+                    for column_cells in worksheet.columns:
+                        length = max(len(str(cell.value)) for cell in column_cells)
+                        worksheet.column_dimensions[column_cells[0].column_letter].width = length + 2
+                
+                with c_ex1:
+                    st.download_button(
+                        label=t["export_excel"],
+                        data=buffer_excel.getvalue(),
+                        file_name=f"nobet_list_{year}_{month}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+            except ImportError:
+                st.error("Missing 'openpyxl' library. Please run: pip install openpyxl")
+            except Exception as e:
+                st.error(f"Excel Export Error: {e}")
 
             # 2. PDF Export
             buffer_pdf = BytesIO()

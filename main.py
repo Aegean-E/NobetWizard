@@ -146,7 +146,7 @@ LANG_TEXT = {
         "btn_save_fixed": "Update Fixed Duties",
         "busy_updated": "Busy days updated for {}!",
         "off_updated": "Off dates updated for {}!",
-        "fixed_updated": "Fixed duties updated for {}!"
+        "fixed_updated": "Fixed duties updated for {}!",
         "history_header": "Previous Month History",
         "history_help": "Select who worked on the last days of the previous month to ensure rest rules (Consecutive/2-Day) are respected.",
         "worked_on": "Worked on {}"
@@ -270,7 +270,7 @@ LANG_TEXT = {
         "btn_save_fixed": "Sabit Nöbetleri Güncelle",
         "busy_updated": "{} için meşgul günler güncellendi!",
         "off_updated": "{} için izinli tarihler güncellendi!",
-        "fixed_updated": "{} için sabit nöbetler güncellendi!"
+        "fixed_updated": "{} için sabit nöbetler güncellendi!",
         "history_header": "Önceki Ay Geçmişi",
         "history_help": "Ardışık nöbet veya dinlenme kurallarının bozulmaması için önceki ayın son günlerinde kimlerin çalıştığını seçin.",
         "worked_on": "{} tarihinde çalışanlar"

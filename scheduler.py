@@ -202,14 +202,14 @@ class DutyScheduler:
                     if self.is_weekend(current_date):
                         f_wknd = p.get('fixed_duties_weekend', 0)
                         if f_wknd > 0 and p['weekend_duty_count'] < f_wknd:
-                            return 0
+                            return (0, p['weekend_duty_count'], p['duty_count'])
                     
                     # Priority 1: Needs total duty
                     f_total = p.get('fixed_duties_total', 0)
                     if f_total > 0 and p['duty_count'] < f_total:
-                        return 1
+                        return (1, p['duty_count'], 0)
                         
-                    return 2
+                    return (2, p['duty_count'], 0)
                 
                 candidates.sort(key=get_sort_key)
                 

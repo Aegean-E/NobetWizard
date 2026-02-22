@@ -121,9 +121,9 @@ LANG_TEXT = {
         "ppl_day": "Günlük Personel",
         "gender_rules": "Cinsiyet Kuralları",
         "gender_help": "Karma: Her vardiyada en az bir Erkek ve bir Kadın gerektirir.",
-        "consecutive": "Ardışık Nöbet İzni",
+        "consecutive": "Nöbet Ertesi İzni Yasağı",
         "consecutive_help": "İşaretlenirse, personel arka arkaya günlerde nöbet tutabilir.",
-        "two_day_rule": "Nöbet Arası 2 Gün (2 Günde Bir Yok)",
+        "two_day_rule": "Gün Aşırı Nöbet Yasağı",
         "two_day_help": "İşaretlenirse, personel gün aşırı nöbet tutamaz (örn. Pzt -> Çarş olmaz, en erken Perş).",
         "header_personnel": "Personel Yönetimi",
         "add_expander": "Yeni Personel Ekle",
@@ -599,6 +599,8 @@ def main():
             
         if "duty_count" not in df_personnel.columns:
             df_personnel["duty_count"] = 0
+        if "weekend_duty_count" not in df_personnel.columns:
+            df_personnel["weekend_duty_count"] = 0
         if "busy_days" not in df_personnel.columns:
             df_personnel["busy_days"] = ""
         if "off_dates" not in df_personnel.columns:
@@ -610,7 +612,7 @@ def main():
             
         # Editable Dataframe
         edited_df = st.data_editor(
-            df_personnel[["name", "gender", "fixed_duties_total", "max_duties", "fixed_duties_weekend", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "leave_dates", "fixed_dates", "duty_count"]],
+            df_personnel[["name", "gender", "fixed_duties_total", "max_duties", "fixed_duties_weekend", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "leave_dates", "fixed_dates", "duty_count", "weekend_duty_count"]],
             column_config={
                 "name": t["name"],
                 "gender": st.column_config.SelectboxColumn(t["gender"], options=["M", "F"], required=True),
@@ -623,7 +625,8 @@ def main():
                 "off_dates": st.column_config.TextColumn(t["off_dates"], help=t["col_off_help"]),
                 "leave_dates": st.column_config.TextColumn(t["leave_dates"], help=t["col_leave_help"]),
                 "fixed_dates": st.column_config.TextColumn(t["fixed_dates"], help=t["col_fixed_help"]),
-                "duty_count": st.column_config.NumberColumn(t["col_assigned"], disabled=True, help=t["col_assigned_help"])
+                "duty_count": st.column_config.NumberColumn(t["col_assigned"], disabled=True, help=t["col_assigned_help"]),
+                "weekend_duty_count": st.column_config.NumberColumn(t["type_wknd"], disabled=True)
             },
             use_container_width=True,
             num_rows="dynamic",
@@ -638,8 +641,15 @@ def main():
         c_dl, c_db, c_json, c_ul, c_cl = st.columns([1, 1, 1, 2, 1])
         
         with c_dl:
-            csv = edited_df.to_csv(index=False).encode('utf-8')
-            st.download_button(t["save_csv"], csv, "nobet_list.csv", "text/csv")
+            dl_type = st.selectbox("Format", ["CSV", "Excel"], label_visibility="collapsed", key="dl_type_pers")
+            if dl_type == "CSV":
+                csv = edited_df.to_csv(index=False).encode('utf-8')
+                st.download_button(t["save_csv"], csv, "nobet_list.csv", "text/csv")
+            else:
+                buffer_pers = BytesIO()
+                with pd.ExcelWriter(buffer_pers, engine='openpyxl') as writer:
+                    edited_df.to_excel(writer, index=False)
+                st.download_button(t["export_excel"], buffer_pers.getvalue(), "nobet_list.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
             
         with c_db:
             if st.button(t["save_db"]):
@@ -781,7 +791,7 @@ def main():
                 stats.append({
                     t["name"]: p['name'],
                     t["col_assigned"]: p['duty_count'],
-                    t["type_wknd"]: p['weekend_duty_count']
+                    t["type_wknd"]: p.get('weekend_duty_count', 0)
                 })
                 duty_counts.append(p['duty_count'])
             
@@ -867,10 +877,10 @@ def main():
             font_path_bold = "Roboto-Bold.ttf"
             
             if not os.path.exists(font_path_reg):
-                urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf", font_path_reg)
+                urllib.request.urlretrieve("https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Regular.ttf", font_path_reg)
             
             if not os.path.exists(font_path_bold):
-                urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf", font_path_bold)
+                urllib.request.urlretrieve("https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Bold.ttf", font_path_bold)
             
             pdfmetrics.registerFont(TTFont('Roboto', font_path_reg))
             pdfmetrics.registerFont(TTFont('Roboto-Bold', font_path_bold))

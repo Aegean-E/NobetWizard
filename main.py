@@ -140,9 +140,9 @@ LANG_TEXT = {
         "name": "İsim",
         "gender": "Cinsiyet",
         "max_duties": "Maksimum Nöbet",
-        "fixed_total": "Belirli Toplam Nöbet Sayısı",
+        "fixed_total": "Sabit Toplam Nöbet",
         "fixed_total_help": "Hedef toplam nöbet. >0 ise Maks yerine geçer.",
-        "fixed_wknd": "Belirli Haftasonu Nöbet Sayısı",
+        "fixed_wknd": "Sabit Haftasonu Nöbet",
         "fixed_wknd_help": "Hedef hafta sonu nöbet. >0 ise Maks H.Sonu yerine geçer.",
         "max_wknd": "Maksimum Hafta Sonu Nöbeti Sayısı",
         "mixed_ok": "Karma Nöbet Tutmaya Uygundur",
@@ -168,8 +168,8 @@ LANG_TEXT = {
         "btn_gen": "🪄 Nöbet Listesi Oluştur",
         "err_no_pers": "Personel eklenmedi!",
         "spinner": "Hesaplanıyor...",
-        "success": "Takvim başarıyla oluşturuldu!",
-        "err_fail": "Uygun takvim oluşturulamadı. Kısıtlamaları azaltmayı deneyin.",
+        "success": "Nöbet takvimi başarıyla oluşturuldu!",
+        "err_fail": "Uygun takvim oluşturulamadı. Kuralları azaltmayı ya da nöbet sayılarını arttırmayı deneyin.",
         "stats": "İstatistikler",
         "col_date": "Tarih",
         "col_day": "Gün",
@@ -204,10 +204,10 @@ LANG_TEXT = {
         "export_pdf": "📄 PDF Olarak İndir",
         "holidays": "Tatiller (Hafta Sonu Say)",
         "holidays_help": "Hafta sonu gibi sayılacak günleri seçin (örn. Resmi Tatiller).",
-        "load_tr_holidays": "🇹🇷 TR Tatillerini Yükle",
+        "load_tr_holidays": "TR Tatillerini Yükle",
         "cal_view": "📅 Takvim Görünümü",
         "list_view": "📋 Liste Görünümü",
-        "fairness_score": "Adalet Puanı (Std Sapma)",
+        "fairness_score": "Adalet Puanı (Standart Sapma)",
         "fairness_help": "Düşük olması iyidir. 0 olması mükemmel eşitlik demektir.",
         "short_days": ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"],
         "conflict_header": "Uyumsuz Çiftler",
@@ -458,9 +458,14 @@ def main():
         return day_en
 
     # --- Header & Logout ---
-    col_header, col_logout = st.columns([8, 1])
+    col_header, col_lang, col_logout = st.columns([6, 1.5, 1])
     with col_header:
         st.title(t["title"])
+    with col_lang:
+        def save_lang():
+            save_db(st.session_state.get('personnel', []), st.session_state.get('username'))
+        st.selectbox("Language", ["English", "Türkçe"], key="cfg_language", label_visibility="collapsed", on_change=save_lang)
+
     with col_logout:
         if st.button(t["logout"], key="btn_logout_top"):
             st.session_state['logged_in'] = False
@@ -470,9 +475,6 @@ def main():
 
     # --- Sidebar: Configuration ---
     st.sidebar.header(t["sidebar_gen"])
-    
-    # Language Selection (Settings)
-    st.sidebar.selectbox("Language / Dil", ["English", "Türkçe"], key="cfg_language")
     
     today = date.today()
     if "cfg_year" not in st.session_state:
@@ -731,7 +733,7 @@ def main():
                 st.toast(t["db_saved"], icon="💾")
 
         with col_act2:
-            if st.button(t["load_db_btn"], use_container_width=True):
+            def load_cloud_data():
                 db_data = load_db(st.session_state.get('username'))
                 st.session_state.personnel = db_data.get("personnel", [])
                 
@@ -748,7 +750,8 @@ def main():
                         st.session_state[key] = db_data[key]
                 
                 st.toast(t["loaded"], icon="✅")
-                st.rerun()
+
+            st.button(t["load_db_btn"], use_container_width=True, on_click=load_cloud_data)
 
         with col_act3:
             json_data = json.dumps(st.session_state.personnel, ensure_ascii=False, indent=4)

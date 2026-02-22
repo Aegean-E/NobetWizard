@@ -126,7 +126,11 @@ LANG_TEXT = {
         "min_seniors": "Min. Seniors per Shift",
         "confirm_yes": "Yes, I'm sure",
         "confirm_no": "Cancel",
-        "placeholder_select": "Choose options"
+        "placeholder_select": "Choose options",
+        "export_ics": "📅 Export to Calendar (.ics)",
+        "btn_reset_month": "🔄 Start New Month (Reset Dates)",
+        "reset_month_help": "Keeps personnel profiles but clears specific date constraints (Busy, Off, Leave, Fixed) for a fresh month.",
+        "reset_success": "Date constraints cleared for the new month!"
     },
     "Türkçe": {
         "title": "🧙‍♂️ Nöbet Sihirbazı",
@@ -229,7 +233,11 @@ LANG_TEXT = {
         "min_seniors": "Vardiya Başı Min. Kıdemli",
         "confirm_yes": "Evet, Eminim",
         "confirm_no": "İptal",
-        "placeholder_select": "Seçiniz"
+        "placeholder_select": "Seçiniz",
+        "export_ics": "📅 Takvime Ekle (.ics)",
+        "btn_reset_month": "🔄 Yeni Ay Başlat (Tarihleri Sıfırla)",
+        "reset_month_help": "Personel profillerini korur ancak aya özel tarihleri (Mazeret, İzin, Sabit) temizler.",
+        "reset_success": "Yeni ay için tarih kısıtlamaları temizlendi!"
     }
 }
 
@@ -439,6 +447,91 @@ def get_calendar_html(year, month, schedule, t):
     html += "</tbody></table>"
     return html
 
+def generate_ics(schedule, title="Duty Roster"):
+    """Generates an iCalendar string for the schedule."""
+    ics_content = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//NobetWizard//DutyRoster//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH"
+    ]
+    
+    for d, team in schedule.items():
+        names = ", ".join([p['name'] for p in team])
+        dt_start = d.strftime("%Y%m%d")
+        dt_end = (d + timedelta(days=1)).strftime("%Y%m%d") # All day events end next day
+        
+        ics_content.append("BEGIN:VEVENT")
+        ics_content.append(f"DTSTART;VALUE=DATE:{dt_start}")
+        ics_content.append(f"DTEND;VALUE=DATE:{dt_end}")
+        ics_content.append(f"SUMMARY:{title}: {names}")
+        ics_content.append(f"DESCRIPTION:Team: {names}")
+        ics_content.append("END:VEVENT")
+        
+    ics_content.append("END:VCALENDAR")
+    return "\n".join(ics_content).encode('utf-8')
+
+def generate_excel(df_res):
+    buffer_excel = BytesIO()
+    with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+        df_res.to_excel(writer, index=False, sheet_name='Schedule')
+        # Adjust column widths
+        worksheet = writer.sheets['Schedule']
+        for column_cells in worksheet.columns:
+            length = max(len(str(cell.value)) for cell in column_cells)
+            worksheet.column_dimensions[column_cells[0].column_letter].width = length + 2
+    return buffer_excel.getvalue()
+
+def generate_pdf(df_res, year, month, t):
+    buffer_pdf = BytesIO()
+    doc = SimpleDocTemplate(buffer_pdf, pagesize=A4)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # --- Font Registration for Turkish Support ---
+    font_name = 'Helvetica' # Default fallback
+    font_name_bold = 'Helvetica-Bold'
+    try:
+        font_path_reg = "Roboto-Regular.ttf"
+        font_path_bold = "Roboto-Bold.ttf"
+        
+        if not os.path.exists(font_path_reg):
+            urllib.request.urlretrieve("https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Regular.ttf", font_path_reg)
+        
+        if not os.path.exists(font_path_bold):
+            urllib.request.urlretrieve("https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Bold.ttf", font_path_bold)
+        
+        pdfmetrics.registerFont(TTFont('Roboto', font_path_reg))
+        pdfmetrics.registerFont(TTFont('Roboto-Bold', font_path_bold))
+        font_name = 'Roboto'
+        font_name_bold = 'Roboto-Bold'
+    except Exception as e:
+        print(f"Font Error: {e}")
+
+    # Title
+    title_style = styles['Title']
+    title_style.fontName = font_name_bold
+    elements.append(Paragraph(f"{t['title']} - {year}/{month}", title_style))
+    
+    # Table
+    data = [df_res.columns.to_list()] + df_res.values.tolist()
+    table = Table(data)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), font_name_bold),
+        ('FONTNAME', (0, 1), (-1, -1), font_name),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ]))
+    elements.append(table)
+    
+    doc.build(elements)
+    return buffer_pdf.getvalue()
+
 def main():
     st.set_page_config(page_title="Nöbet Wizard", layout="wide")
     
@@ -643,9 +736,58 @@ def main():
                     st.rerun()
 
     # --- Main Area: Personnel Management ---
-    col_header, col_gen_btn = st.columns([3, 1])
+    has_schedule = st.session_state.get("schedule_success") and st.session_state.get("generated_schedule")
+    
+    if has_schedule:
+        col_header, col_dl_fmt, col_dl_btn, col_gen_btn = st.columns([2, 1, 1, 1])
+    else:
+        col_header, col_gen_btn = st.columns([3, 1])
+        
     with col_header:
         st.header(t["header_personnel"])
+        
+    if has_schedule:
+        with col_dl_fmt:
+            dl_format = st.selectbox("Format", ["Excel", "PDF", "ICS"], label_visibility="collapsed", key="dl_fmt_top")
+        
+        # Prepare data for download
+        schedule = st.session_state.generated_schedule
+        gen_year = st.session_state.gen_year
+        gen_month = st.session_state.gen_month
+        
+        display_data = []
+        for d, team in sorted(schedule.items()):
+            names = ", ".join([p['name'] for p in team])
+            day_name = translate_day(DAYS_OF_WEEK[d.weekday()])
+            is_weekend = d.weekday() >= 5
+            display_data.append({
+                t["col_date"]: d.strftime("%d/%m/%Y"),
+                t["col_day"]: day_name,
+                t["col_team"]: names,
+                t["col_type"]: t["type_wknd"] if is_weekend else t["type_wkday"]
+            })
+        df_res = pd.DataFrame(display_data)
+        
+        data = None
+        file_name = ""
+        mime = ""
+        
+        if dl_format == "Excel":
+            data = generate_excel(df_res)
+            file_name = f"nobet_list_{gen_year}_{gen_month}.xlsx"
+            mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        elif dl_format == "PDF":
+            data = generate_pdf(df_res, gen_year, gen_month, t)
+            file_name = f"nobet_list_{gen_year}_{gen_month}.pdf"
+            mime = "application/pdf"
+        elif dl_format == "ICS":
+            data = generate_ics(schedule, t["title"].split(" ")[0] + " Duty")
+            file_name = f"nobet_list_{gen_year}_{gen_month}.ics"
+            mime = "text/calendar"
+            
+        with col_dl_btn:
+            st.download_button(label="⬇️ Download", data=data, file_name=file_name, mime=mime, use_container_width=True)
+
     with col_gen_btn:
         btn_gen_clicked = st.button(t["btn_gen"], type="primary", use_container_width=True)
     
@@ -833,14 +975,25 @@ def main():
             use_container_width=True
         )
         
-    col_act4, col_act5 = st.columns(2)
+    col_act4, col_act5, col_act6 = st.columns(3)
     
     with col_act4:
+        if st.button(t["btn_reset_month"], use_container_width=True, help=t["reset_month_help"]):
+            for p in st.session_state.personnel:
+                p['busy_days'] = ""
+                p['off_dates'] = ""
+                p['leave_dates'] = ""
+                p['fixed_dates'] = ""
+                # We don't reset fixed_duties targets or roles, just dates
+            st.toast(t["reset_success"], icon="🔄")
+            st.rerun()
+
+    with col_act5:
         if st.button(t["clear_all"], use_container_width=True):
             st.session_state.personnel = []
             st.rerun()
 
-    with col_act5:
+    with col_act6:
         if "confirm_clear_db" not in st.session_state:
             st.session_state.confirm_clear_db = False
         
@@ -898,6 +1051,7 @@ def main():
                 st.session_state.gen_year = year
                 st.session_state.gen_month = month
                 st.session_state.schedule_success = True
+                st.rerun()
             else:
                 st.session_state.schedule_success = False
                 st.error(t["err_fail"])
@@ -988,92 +1142,6 @@ def main():
                 
                 # Display with gradient
                 st.dataframe(co_matrix.style.background_gradient(cmap="Reds"), use_container_width=True)
-        
-        # --- Export Section ---
-        st.divider()
-        c_ex1, c_ex2 = st.columns(2)
-        
-        # 1. Excel Export
-        buffer_excel = BytesIO()
-        try:
-            with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                df_res.to_excel(writer, index=False, sheet_name='Schedule')
-                # Adjust column widths
-                worksheet = writer.sheets['Schedule']
-                for column_cells in worksheet.columns:
-                    length = max(len(str(cell.value)) for cell in column_cells)
-                    worksheet.column_dimensions[column_cells[0].column_letter].width = length + 2
-            
-            with c_ex1:
-                st.download_button(
-                    label=t["export_excel"],
-                    data=buffer_excel.getvalue(),
-                    file_name=f"nobet_list_{gen_year}_{gen_month}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-        except ImportError:
-            st.error("Missing 'openpyxl' library. Please run: pip install openpyxl")
-        except Exception as e:
-            st.error(f"Excel Export Error: {e}")
-
-        # 2. PDF Export
-        buffer_pdf = BytesIO()
-        doc = SimpleDocTemplate(buffer_pdf, pagesize=A4)
-        elements = []
-        styles = getSampleStyleSheet()
-        
-        # --- Font Registration for Turkish Support ---
-        font_name = 'Helvetica' # Default fallback
-        font_name_bold = 'Helvetica-Bold'
-        try:
-            font_path_reg = "Roboto-Regular.ttf"
-            font_path_bold = "Roboto-Bold.ttf"
-            
-            if not os.path.exists(font_path_reg):
-                urllib.request.urlretrieve("https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Regular.ttf", font_path_reg)
-            
-            if not os.path.exists(font_path_bold):
-                urllib.request.urlretrieve("https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Bold.ttf", font_path_bold)
-            
-            pdfmetrics.registerFont(TTFont('Roboto', font_path_reg))
-            pdfmetrics.registerFont(TTFont('Roboto-Bold', font_path_bold))
-            font_name = 'Roboto'
-            font_name_bold = 'Roboto-Bold'
-        except Exception as e:
-            st.warning(f"Could not load custom fonts, Turkish characters might not display correctly. Error: {e}")
-
-        # Title
-        title_style = styles['Title']
-        title_style.fontName = font_name_bold
-        elements.append(Paragraph(f"{t['title']} - {gen_year}/{gen_month}", title_style))
-        
-        # Table
-        data = [df_res.columns.to_list()] + df_res.values.tolist()
-        table = Table(data)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), font_name_bold),
-            ('FONTNAME', (0, 1), (-1, -1), font_name),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ]))
-        elements.append(table)
-        
-        try:
-            doc.build(elements)
-            pdf_data = buffer_pdf.getvalue()
-            with c_ex2:
-                st.download_button(
-                    label=t["export_pdf"],
-                    data=pdf_data,
-                    file_name=f"nobet_list_{gen_year}_{gen_month}.pdf",
-                    mime="application/pdf"
-                )
-        except Exception as e:
-            st.error(f"PDF Generation Error: {e}")
 
 if __name__ == '__main__':
     if st.runtime.exists():

@@ -18,6 +18,9 @@ class DutyScheduler:
 
     def is_weekend(self, d):
         # 5 = Saturday, 6 = Sunday
+        # Also check if the date is in the configured holidays list
+        if d.strftime("%Y-%m-%d") in self.config.get('holidays', []):
+            return True
         return d.weekday() >= 5
 
     def get_week_number(self, d):

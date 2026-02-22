@@ -11,6 +11,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
+import holidays
 
 # --- Translation Dictionary ---
 LANG_TEXT = {
@@ -88,7 +89,10 @@ LANG_TEXT = {
         "user_exists": "User already exists",
         "reg_success": "Account Created! Please Login.",
         "export_excel": "📊 Export to Excel",
-        "export_pdf": "📄 Export to PDF"
+        "export_pdf": "📄 Export to PDF",
+        "holidays": "Holidays (Count as Weekend)",
+        "holidays_help": "Select dates that should be treated as weekends (e.g. National Holidays).",
+        "load_tr_holidays": "🇹🇷 Load TR Holidays"
     },
     "Türkçe": {
         "title": "🧙‍♂️ Nöbet Sihirbazı",
@@ -164,7 +168,10 @@ LANG_TEXT = {
         "user_exists": "Kullanıcı zaten var",
         "reg_success": "Hesap Oluşturuldu! Lütfen Giriş Yapın.",
         "export_excel": "📊 Excel Olarak İndir",
-        "export_pdf": "📄 PDF Olarak İndir"
+        "export_pdf": "📄 PDF Olarak İndir",
+        "holidays": "Tatiller (Hafta Sonu Say)",
+        "holidays_help": "Hafta sonu gibi sayılacak günleri seçin (örn. Resmi Tatiller).",
+        "load_tr_holidays": "🇹🇷 TR Tatillerini Yükle"
     }
 }
 
@@ -307,6 +314,27 @@ def main():
     )
     allow_consecutive = st.sidebar.checkbox(t["consecutive"], value=False, help=t["consecutive_help"])
     require_two_rest = st.sidebar.checkbox(t["two_day_rule"], value=False, help=t["two_day_help"])
+    
+    # Holidays Selection
+    num_days_in_month = calendar.monthrange(year, month)[1]
+    all_month_dates = [date(year, month, day).strftime("%Y-%m-%d") for day in range(1, num_days_in_month + 1)]
+    
+    if "holidays_multiselect" not in st.session_state:
+        st.session_state["holidays_multiselect"] = []
+
+    if st.sidebar.button(t["load_tr_holidays"]):
+        try:
+            tr_holidays = holidays.TR(years=year)
+            month_holidays = [d.strftime("%Y-%m-%d") for d in tr_holidays if d.month == month]
+            st.session_state["holidays_multiselect"] = month_holidays
+            st.rerun()
+        except Exception as e:
+            st.sidebar.error(f"Error: {e}")
+
+    # Ensure selected holidays are valid for the current month (prevents errors when changing months)
+    st.session_state["holidays_multiselect"] = [d for d in st.session_state["holidays_multiselect"] if d in all_month_dates]
+    
+    holidays = st.sidebar.multiselect(t["holidays"], all_month_dates, key="holidays_multiselect", help=t["holidays_help"])
     
     # --- Conditional Rules ---
     st.sidebar.subheader(t["rule_header"])
@@ -508,7 +536,8 @@ def main():
             'gender_mode': gender_map[gender_mode],
             'allow_consecutive': allow_consecutive,
             'conditional_rules': scheduler_rules,
-            'require_two_rest_days': require_two_rest
+            'require_two_rest_days': require_two_rest,
+            'holidays': holidays
         }
 
         # Initialize Scheduler
@@ -551,6 +580,10 @@ def main():
                     t["type_wknd"]: p['weekend_duty_count']
                 })
             st.dataframe(pd.DataFrame(stats))
+            
+            # Chart
+            st.caption("Duty Distribution / Nöbet Dağılımı")
+            st.bar_chart(pd.DataFrame(stats).set_index(t["name"])[[t["col_assigned"], t["type_wknd"]]])
             
             # --- Export Section ---
             st.divider()

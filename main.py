@@ -200,6 +200,23 @@ def check_hashes(password, hashed_text):
         return True
     return False
 
+def authenticate(username, password):
+    # 1. Check Local DB (Hashed passwords)
+    users = load_users()
+    if username in users and check_hashes(password, users[username]):
+        return True
+    
+    # 2. Check Secrets (Fallback Admin - Plain text in secrets)
+    # Useful if the local DB is wiped or empty
+    if hasattr(st, "secrets") and "admin" in st.secrets:
+        try:
+            if username == st.secrets["admin"]["username"] and password == st.secrets["admin"]["password"]:
+                return True
+        except KeyError:
+            pass
+            
+    return False
+
 def login_page():
     st.title("🧙‍♂️ Nöbet Wizard - Login")
     
@@ -212,8 +229,7 @@ def login_page():
         username = st.text_input(t["username"], key="login_user")
         password = st.text_input(t["password"], type='password', key="login_pass")
         if st.button(t["login_btn"]):
-            users = load_users()
-            if username in users and check_hashes(password, users[username]):
+            if authenticate(username, password):
                 st.session_state['logged_in'] = True
                 st.session_state['username'] = username
                 if 'personnel' in st.session_state:

@@ -4,4 +4,3 @@ openpyxl
 reportlab
 holidays
 matplotlib
-holidays

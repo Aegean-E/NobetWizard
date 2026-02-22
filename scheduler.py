@@ -1,6 +1,8 @@
 import calendar
 import random
 from datetime import date, timedelta
+import statistics
+import copy
 
 class DutyScheduler:
     def __init__(self, year, month, personnel_list, config):
@@ -168,9 +170,12 @@ class DutyScheduler:
             p['duty_count'] = 0
             p['weekend_duty_count'] = 0
 
-        # Try to generate schedule multiple times (Monte Carlo / Restart)
-        # because greedy algorithms can get stuck
-        for attempt in range(100):
+        # Optimization: Find multiple valid schedules and pick the fairest one
+        valid_solutions = []
+        target_solutions = 5
+        max_attempts = 200
+
+        for attempt in range(max_attempts):
             self.schedule = {}
             # Reset temp counts for this attempt
             for p in self.personnel:
@@ -248,6 +253,39 @@ class DutyScheduler:
                         p['weekend_duty_count'] += 1
             
             if success:
-                return True, self.schedule
+                # Calculate Fairness Score (Standard Deviation)
+                counts = [p['duty_count'] for p in self.personnel]
+                score = statistics.stdev(counts) if len(counts) > 1 else 0
+                
+                valid_solutions.append({
+                    'schedule': copy.deepcopy(self.schedule),
+                    'score': score
+                })
+                
+                if len(valid_solutions) >= target_solutions:
+                    break
         
+        if valid_solutions:
+            # Sort by score (lowest std dev is best)
+            valid_solutions.sort(key=lambda x: x['score'])
+            best_solution = valid_solutions[0]
+            self.schedule = best_solution['schedule']
+            
+            # Sync counts back to personnel objects so UI stats are accurate
+            for p in self.personnel:
+                p['duty_count'] = 0
+                p['weekend_duty_count'] = 0
+                
+            for d, team in self.schedule.items():
+                for p_sched in team:
+                    # Find the original person object to update
+                    for p_orig in self.personnel:
+                        if p_orig['name'] == p_sched['name']:
+                            p_orig['duty_count'] += 1
+                            if self.is_weekend(d):
+                                p_orig['weekend_duty_count'] += 1
+                            break
+            
+            return True, self.schedule
+            
         return False, {}

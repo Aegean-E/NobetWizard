@@ -39,6 +39,8 @@ LANG_TEXT = {
         "consecutive_help": "If checked, personnel can be assigned to duties on back-to-back days.",
         "two_day_rule": "Require 2 Days Rest",
         "two_day_help": "If checked, personnel cannot hold duty every other day (e.g. Mon -> Wed is forbidden).",
+        "weekly_limit": "Max Duties per Week",
+        "weekly_limit_help": "Maximum number of duties a person can hold in a calendar week (Mon-Sun).",
         "header_personnel": "Personnel Management",
         "add_expander": "Add New Personnel",
         "name": "Name",
@@ -157,6 +159,8 @@ LANG_TEXT = {
         "consecutive_help": "İşaretlenirse, personel arka arkaya günlerde nöbet tutabilir.",
         "two_day_rule": "Gün Aşırı Nöbet Yasağı",
         "two_day_help": "İşaretlenirse, personel gün aşırı nöbet tutamaz (örn. Pzt -> Çarş olmaz, en erken Perş).",
+        "weekly_limit": "Haftalık Maksimum Nöbet",
+        "weekly_limit_help": "Bir kişinin bir takvim haftasında (Pzt-Paz) tutabileceği maksimum nöbet sayısı.",
         "header_personnel": "Personel Yönetimi",
         "add_expander": "Yeni Personel Ekle",
         "name": "İsim",
@@ -328,6 +332,7 @@ def save_db(personnel, username):
         "cfg_consecutive": st.session_state.get("cfg_consecutive"),
         "cfg_two_rest": st.session_state.get("cfg_two_rest"),
         "cfg_min_seniors": st.session_state.get("cfg_min_seniors"),
+        "cfg_max_weekly": st.session_state.get("cfg_max_weekly"),
         "cfg_language": st.session_state.get("cfg_language")
     }
 
@@ -581,7 +586,7 @@ def main():
             st.session_state.holidays_multiselect = db_data["holidays_multiselect"]
             
         # Restore config widgets (Streamlit handles this if we set the key in session_state)
-        for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_min_seniors", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_language"]:
+        for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_min_seniors", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_max_weekly", "cfg_language"]:
             if key in db_data:
                 st.session_state[key] = db_data[key]
         
@@ -670,6 +675,10 @@ def main():
     if "cfg_two_rest" not in st.session_state:
         st.session_state.cfg_two_rest = False
     require_two_rest = st.sidebar.checkbox(t["two_day_rule"], help=t["two_day_help"], key="cfg_two_rest")
+    
+    if "cfg_max_weekly" not in st.session_state:
+        st.session_state.cfg_max_weekly = 3
+    max_weekly = st.sidebar.number_input(t["weekly_limit"], min_value=1, max_value=7, help=t["weekly_limit_help"], key="cfg_max_weekly")
     
     # Holidays Selection
     num_days_in_month = calendar.monthrange(year, month)[1]
@@ -1149,7 +1158,7 @@ def main():
             if "holidays_multiselect" in db_data:
                 st.session_state.holidays_multiselect = db_data["holidays_multiselect"]
             
-            for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_min_seniors", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_language"]:
+            for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_min_seniors", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_max_weekly", "cfg_language"]:
                 if key in db_data:
                     st.session_state[key] = db_data[key]
             
@@ -1243,6 +1252,7 @@ def main():
                 'gender_mode': gender_map[gender_mode],
                 'allow_consecutive': allow_consecutive,
                 'conditional_rules': scheduler_rules,
+                'max_weekly_duties': max_weekly,
                 'require_two_rest_days': require_two_rest,
                 'holidays': selected_holidays,
                 'forbidden_pairs': st.session_state.forbidden_pairs
@@ -1252,7 +1262,7 @@ def main():
             scheduler = DutyScheduler(year, month, st.session_state.personnel, config)
             
             with st.spinner(t["spinner"]):
-                success, schedule = scheduler.generate()
+                success, schedule, error_msg = scheduler.generate()
 
             if success:
                 st.session_state.generated_schedule = schedule
@@ -1263,7 +1273,10 @@ def main():
                 st.rerun()
             else:
                 st.session_state.schedule_success = False
-                st.error(t["err_fail"])
+                if error_msg:
+                    st.error(f"{t['err_fail']} \n\nDetails: {error_msg}")
+                else:
+                    st.error(t["err_fail"])
 
     if st.session_state.get("schedule_success") and st.session_state.get("generated_schedule"):
         st.divider()

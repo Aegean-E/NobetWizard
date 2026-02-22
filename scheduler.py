@@ -74,8 +74,8 @@ class DutyScheduler:
                 if any(p['name'] == person['name'] for p in team):
                     duties_this_week += 1
         
-        # Hard limit of 3 per week to ensure spread, or configurable
-        if duties_this_week >= 3:
+        # Configurable limit (Default 3)
+        if duties_this_week >= self.config.get('max_weekly_duties', 3):
             return False
 
         # 6. Busy Days (Day of Week constraint)
@@ -181,6 +181,7 @@ class DutyScheduler:
         valid_solutions = []
         target_solutions = 5
         max_attempts = 200
+        last_error = ""
 
         for attempt in range(max_attempts):
             self.schedule = {}
@@ -250,6 +251,7 @@ class DutyScheduler:
                 # Verify day is full
                 if len(day_team) < needed_count:
                     success = False
+                    last_error = f"Could not find enough eligible personnel for {current_date_str}. Found {len(day_team)}/{needed_count}."
                     break
                 
                 # Commit day
@@ -262,7 +264,13 @@ class DutyScheduler:
             if success:
                 # Calculate Fairness Score (Standard Deviation)
                 counts = [p['duty_count'] for p in self.personnel]
-                score = statistics.stdev(counts) if len(counts) > 1 else 0
+                wknd_counts = [p['weekend_duty_count'] for p in self.personnel]
+                
+                std_total = statistics.stdev(counts) if len(counts) > 1 else 0
+                std_wknd = statistics.stdev(wknd_counts) if len(wknd_counts) > 1 else 0
+                
+                # Combined score: Total variation + Weekend variation
+                score = std_total + std_wknd
                 
                 valid_solutions.append({
                     'schedule': copy.deepcopy(self.schedule),
@@ -293,6 +301,6 @@ class DutyScheduler:
                                 p_orig['weekend_duty_count'] += 1
                             break
             
-            return True, self.schedule
+            return True, self.schedule, None
             
-        return False, {}
+        return False, {}, last_error

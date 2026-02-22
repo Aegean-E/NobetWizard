@@ -275,7 +275,8 @@ def save_db(personnel, username):
         "cfg_ppl": st.session_state.get("cfg_ppl"),
         "cfg_gender": st.session_state.get("cfg_gender"),
         "cfg_consecutive": st.session_state.get("cfg_consecutive"),
-        "cfg_two_rest": st.session_state.get("cfg_two_rest")
+        "cfg_two_rest": st.session_state.get("cfg_two_rest"),
+        "cfg_language": st.session_state.get("cfg_language")
     }
     
     # 1. Try Cloud Database
@@ -419,19 +420,6 @@ def main():
         login_page()
         return
     
-    # --- Header & Language Selection ---
-    col_header, col_lang = st.columns([6, 1])
-    with col_lang:
-        lang = st.selectbox("Language / Dil", ["English", "Türkçe"], label_visibility="collapsed")
-    
-    t = LANG_TEXT[lang]
-    
-    # Helper to translate day names for display
-    def translate_day(day_en):
-        if lang == "Türkçe" and day_en in DAYS_OF_WEEK:
-            return DAYS_TR[DAYS_OF_WEEK.index(day_en)]
-        return day_en
-
     if 'personnel' not in st.session_state:
         # Load full project state
         db_data = load_db(st.session_state.get('username'))
@@ -446,15 +434,39 @@ def main():
             st.session_state.holidays_multiselect = db_data["holidays_multiselect"]
             
         # Restore config widgets (Streamlit handles this if we set the key in session_state)
-        for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_gender", "cfg_consecutive", "cfg_two_rest"]:
+        for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_language"]:
             if key in db_data:
                 st.session_state[key] = db_data[key]
 
+    # --- Language Setup ---
+    if "cfg_language" not in st.session_state:
+        st.session_state.cfg_language = "English"
+    
+    lang = st.session_state.cfg_language
+    t = LANG_TEXT[lang]
+
+    # Helper to translate day names for display
+    def translate_day(day_en):
+        if lang == "Türkçe" and day_en in DAYS_OF_WEEK:
+            return DAYS_TR[DAYS_OF_WEEK.index(day_en)]
+        return day_en
+
+    # --- Header & Logout ---
+    col_header, col_logout = st.columns([8, 1])
     with col_header:
         st.title(t["title"])
+    with col_logout:
+        if st.button(t["logout"], key="btn_logout_top"):
+            st.session_state['logged_in'] = False
+            if 'personnel' in st.session_state:
+                del st.session_state['personnel']
+            st.rerun()
 
     # --- Sidebar: Configuration ---
     st.sidebar.header(t["sidebar_gen"])
+    
+    # Language Selection (Settings)
+    st.sidebar.selectbox("Language / Dil", ["English", "Türkçe"], key="cfg_language")
     
     today = date.today()
     if "cfg_year" not in st.session_state:
@@ -579,14 +591,6 @@ def main():
                 if st.button("❌", key=f"del_conf_{i}"):
                     st.session_state.forbidden_pairs.pop(i)
                     st.rerun()
-    
-    # Logout Button
-    st.sidebar.markdown("---")
-    if st.sidebar.button(t["logout"]):
-        st.session_state['logged_in'] = False
-        if 'personnel' in st.session_state:
-            del st.session_state['personnel']
-        st.rerun()
 
     # --- Main Area: Personnel Management ---
     st.header(t["header_personnel"])
@@ -711,72 +715,88 @@ def main():
 
         # --- Save / Load Section ---
         st.divider()
-        c_dl, c_db, c_json, c_ul, c_cl = st.columns([1, 1, 1, 2, 1])
         
-        with c_dl:
-            dl_type = st.selectbox("Format", ["CSV", "Excel"], label_visibility="collapsed", key="dl_type_pers")
-            if dl_type == "CSV":
-                csv = edited_df.to_csv(index=False).encode('utf-8')
-                st.download_button(t["save_csv"], csv, "nobet_list.csv", "text/csv")
-            else:
-                buffer_pers = BytesIO()
-                with pd.ExcelWriter(buffer_pers, engine='openpyxl') as writer:
-                    edited_df.to_excel(writer, index=False)
-                st.download_button(t["export_excel"], buffer_pers.getvalue(), "nobet_list.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            
-        with c_db:
-            if st.button(t["save_db"]):
+        # 1. Main Actions Toolbar
+        col_act1, col_act2, col_act3 = st.columns(3)
+        
+        with col_act1:
+            if st.button(t["save_db"], use_container_width=True, type="primary"):
                 save_db(st.session_state.personnel, st.session_state.get('username'))
-                st.success(t["db_saved"])
+                st.toast(t["db_saved"], icon="💾")
 
-        with c_json:
+        with col_act2:
             json_data = json.dumps(st.session_state.personnel, ensure_ascii=False, indent=4) # Keep download as just personnel for portability
             st.download_button(
                 label=t["download_db"],
                 data=json_data,
                 file_name="personnel_db.json",
-                mime="application/json"
+                mime="application/json",
+                use_container_width=True
             )
-
-        # Template Download
-        with c_dl:
-            # Create empty template dataframe
-            template_cols = ["name", "gender", "fixed_duties_total", "max_duties", "fixed_duties_weekend", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "leave_dates", "fixed_dates"]
-            df_template = pd.DataFrame(columns=template_cols)
-            buffer_template = BytesIO()
-            with pd.ExcelWriter(buffer_template, engine='openpyxl') as writer:
-                df_template.to_excel(writer, index=False)
             
-            st.download_button(
-                label=t["template_download"],
-                data=buffer_template.getvalue(),
-                file_name="personnel_template.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-        with c_ul:
-            uploaded_file = st.file_uploader(t["load_csv"], type=["csv", "xlsx"], label_visibility="collapsed")
-            if uploaded_file:
-                try:
-                    if uploaded_file.name.endswith('.csv'):
-                        loaded_df = pd.read_csv(uploaded_file)
-                    else:
-                        loaded_df = pd.read_excel(uploaded_file)
-                    
-                    # Sanitize boolean columns if coming from Excel
-                    if "mixed_gender_allowed" in loaded_df.columns:
-                        loaded_df["mixed_gender_allowed"] = loaded_df["mixed_gender_allowed"].astype(bool)
-                        
-                    st.session_state.personnel = loaded_df.to_dict('records')
-                    st.success(t["loaded"])
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error: {e}")
-
-        with c_cl:
-            if st.button(t["clear_all"]):
+        with col_act3:
+            if st.button(t["clear_all"], use_container_width=True):
                 st.session_state.personnel = []
                 st.rerun()
+
+        # 2. Import / Export Expander
+        with st.expander("📂 " + t["load_csv"] + " / " + t["save_csv"], expanded=False):
+            c_ex, c_im = st.columns(2)
+            
+            # Export Column
+            with c_ex:
+                st.caption(t["save_csv"] + " / Excel")
+                
+                # Export Format Selection
+                dl_type = st.radio("Format", ["Excel", "CSV"], horizontal=True, label_visibility="collapsed", key="dl_type_pers")
+                
+                if dl_type == "CSV":
+                    csv = edited_df.to_csv(index=False).encode('utf-8')
+                    st.download_button(f"⬇️ {t['save_csv']}", csv, "nobet_list.csv", "text/csv", use_container_width=True)
+                else:
+                    buffer_pers = BytesIO()
+                    with pd.ExcelWriter(buffer_pers, engine='openpyxl') as writer:
+                        edited_df.to_excel(writer, index=False)
+                    st.download_button(f"⬇️ {t['export_excel']}", buffer_pers.getvalue(), "nobet_list.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                
+                st.divider()
+                
+                # Template Download
+                template_cols = ["name", "gender", "fixed_duties_total", "max_duties", "fixed_duties_weekend", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "leave_dates", "fixed_dates"]
+                df_template = pd.DataFrame(columns=template_cols)
+                buffer_template = BytesIO()
+                with pd.ExcelWriter(buffer_template, engine='openpyxl') as writer:
+                    df_template.to_excel(writer, index=False)
+                
+                st.download_button(
+                    label=f"📄 {t['template_download']}",
+                    data=buffer_template.getvalue(),
+                    file_name="personnel_template.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+
+            # Import Column
+            with c_im:
+                st.caption(t["load_csv"])
+                uploaded_file = st.file_uploader(t["load_csv"], type=["csv", "xlsx"], label_visibility="collapsed")
+                
+                if uploaded_file:
+                    try:
+                        if uploaded_file.name.endswith('.csv'):
+                            loaded_df = pd.read_csv(uploaded_file)
+                        else:
+                            loaded_df = pd.read_excel(uploaded_file)
+                        
+                        # Sanitize boolean columns if coming from Excel
+                        if "mixed_gender_allowed" in loaded_df.columns:
+                            loaded_df["mixed_gender_allowed"] = loaded_df["mixed_gender_allowed"].astype(bool)
+                            
+                        st.session_state.personnel = loaded_df.to_dict('records')
+                        st.toast(t["loaded"], icon="✅")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {e}")
     else:
         st.info(t["info_start"])
 

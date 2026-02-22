@@ -1,6 +1,11 @@
 # 🧙‍♂️ Nöbet Wizard (Duty Roster Generator)
 
-[**Live Demo**](https://nobetwizard.streamlit.app/)
+<p align="center">
+  <img src="https://github.com/Aegean-E/NobetWizard/blob/main/banner.jpg?raw=true" alt="Nöbet Wizard Banner" width="1200">
+</p>
+
+
+<p align="center">https://nobetwizard.streamlit.app/</p>
 
 **Nöbet Wizard** is a powerful, web-based application built with Python and Streamlit designed to automate the creation of monthly duty rosters (nöbet listesi). It handles complex constraints, personnel preferences, and fair distribution rules to generate optimal schedules in seconds.
 
@@ -63,9 +68,6 @@
 *   Built-in Login/Register system.
 *   Secure password hashing.
     *   **Super Admin Fallback:** Configurable via Streamlit Secrets for emergency access.
-*   **Cloud Persistence (Optional):**
-    *   Supports **Google Cloud Firestore** to save user data and rosters across app restarts (essential for Streamlit Cloud deployments).
-    *   Falls back to local JSON files if cloud secrets are not configured.
 
 ---
 
@@ -99,30 +101,6 @@
     *   **Generate:** Click "Create Nöbet List".
     *   **Analyze:** Check the "Calendar View" and "Statistics" tabs.
     *   **Export:** Download your schedule as PDF or Excel.
-
----
-
-## ☁️ Deployment & Secrets
-
-To enable Cloud Persistence (Firestore) and Admin access, create a `.streamlit/secrets.toml` file or configure secrets in your hosting dashboard:
-
-```toml
-[admin]
-username = "admin"
-password = "YourStrongPassword"
-
-[firestore]
-type = "service_account"
-project_id = "your-project-id"
-private_key_id = "..."
-private_key = "-----BEGIN PRIVATE KEY-----..."
-client_email = "..."
-client_id = "..."
-auth_uri = "https://accounts.google.com/o/oauth2/auth"
-token_uri = "https://oauth2.googleapis.com/token"
-auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
-client_x509_cert_url = "..."
-```
 
 ---
 

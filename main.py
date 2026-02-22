@@ -12,6 +12,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 import holidays
+import statistics
 
 # --- Translation Dictionary ---
 LANG_TEXT = {
@@ -42,6 +43,7 @@ LANG_TEXT = {
         "mixed_ok_help": "Uncheck if person cannot work in mixed-gender teams",
         "busy_days": "Busy Days (Cannot hold duty)",
         "off_dates": "Specific Off Dates",
+        "leave_dates": "Leave Dates",
         "fixed_dates": "Fixed Duty Dates (Must hold)",
         "add_btn": "Add Person",
         "added": "Added {}",
@@ -70,6 +72,7 @@ LANG_TEXT = {
         "col_assigned_help": "Total duties assigned in last generation",
         "col_busy_help": "Comma-separated days (e.g. Monday, Tuesday)",
         "col_off_help": "Specific dates (YYYY-MM-DD)",
+        "col_leave_help": "Dates on leave (YYYY-MM-DD)",
         "col_fixed_help": "Specific dates (YYYY-MM-DD)",
         "gender_opts": ["Any", "Mixed (Must have M & F)", "Single Gender (All M or All F)"],
         "rule_header": "Conditional Rules",
@@ -92,7 +95,12 @@ LANG_TEXT = {
         "export_pdf": "📄 Export to PDF",
         "holidays": "Holidays (Count as Weekend)",
         "holidays_help": "Select dates that should be treated as weekends (e.g. National Holidays).",
-        "load_tr_holidays": "🇹🇷 Load TR Holidays"
+        "load_tr_holidays": "🇹🇷 Load TR Holidays",
+        "cal_view": "📅 Calendar View",
+        "list_view": "📋 List View",
+        "fairness_score": "Fairness Score (Std Dev)",
+        "fairness_help": "Lower is better. 0 means perfect equality.",
+        "short_days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     },
     "Türkçe": {
         "title": "🧙‍♂️ Nöbet Sihirbazı",
@@ -121,6 +129,7 @@ LANG_TEXT = {
         "mixed_ok_help": "Kişi karma ekiplerde çalışamıyorsa işareti kaldırın",
         "busy_days": "Meşgul Günler",
         "off_dates": "İzinli Tarihler",
+        "leave_dates": "Yıllık İzin",
         "fixed_dates": "Sabit Nöbetler",
         "add_btn": "Personel Ekle",
         "added": "{} Eklendi",
@@ -149,6 +158,7 @@ LANG_TEXT = {
         "col_assigned_help": "Son üretimde atanan toplam nöbet",
         "col_busy_help": "Virgülle ayrılmış günler (örn. Monday, Tuesday)",
         "col_off_help": "Belirli tarihler (YYYY-AA-GG)",
+        "col_leave_help": "İzinli olunan tarihler (YYYY-AA-GG)",
         "col_fixed_help": "Belirli tarihler (YYYY-AA-GG)",
         "gender_opts": ["Fark etmez", "Karma (E & K olmalı)", "Tek Cinsiyet (Hepsi E veya Hepsi K)"],
         "rule_header": "Koşullu Kurallar",
@@ -171,7 +181,12 @@ LANG_TEXT = {
         "export_pdf": "📄 PDF Olarak İndir",
         "holidays": "Tatiller (Hafta Sonu Say)",
         "holidays_help": "Hafta sonu gibi sayılacak günleri seçin (örn. Resmi Tatiller).",
-        "load_tr_holidays": "🇹🇷 TR Tatillerini Yükle"
+        "load_tr_holidays": "🇹🇷 TR Tatillerini Yükle",
+        "cal_view": "📅 Takvim Görünümü",
+        "list_view": "📋 Liste Görünümü",
+        "fairness_score": "Adalet Puanı (Std Sapma)",
+        "fairness_help": "Düşük olması iyidir. 0 olması mükemmel eşitlik demektir.",
+        "short_days": ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
     }
 }
 
@@ -264,6 +279,38 @@ def login_page():
                 save_users(users)
                 st.success(t["reg_success"])
 
+def get_calendar_html(year, month, schedule, t):
+    cal = calendar.monthcalendar(year, month)
+    
+    # Header
+    headers = "".join([f"<th style='border:1px solid #ddd; padding:8px; background:#f0f2f6; width:14%;'>{day}</th>" for day in t["short_days"]])
+    
+    html = f"<table style='width:100%; border-collapse:collapse; table-layout: fixed;'><thead><tr>{headers}</tr></thead><tbody>"
+    
+    for week in cal:
+        html += "<tr>"
+        for day in week:
+            if day == 0:
+                html += "<td style='border:1px solid #ddd; background:#f9f9f9;'></td>"
+            else:
+                current_date = date(year, month, day)
+                is_weekend = current_date.weekday() >= 5
+                bg_color = "#fff" if not is_weekend else "#fafafa"
+                
+                day_content = f"<div style='font-weight:bold; margin-bottom:5px; color:#444;'>{day}</div>"
+                
+                if current_date in schedule:
+                    team = schedule[current_date]
+                    for p in team:
+                        # Random pastel colors or fixed blue
+                        day_content += f"<div style='background:#e6f3ff; padding:2px 4px; margin-bottom:2px; border-radius:4px; font-size:11px; border:1px solid #cce5ff; color:#004085;'>{p['name']}</div>"
+                
+                html += f"<td style='border:1px solid #ddd; padding:5px; height:100px; vertical-align:top; background:{bg_color};'>{day_content}</td>"
+        html += "</tr>"
+    
+    html += "</tbody></table>"
+    return html
+
 def main():
     st.set_page_config(page_title="Nöbet Wizard", layout="wide")
     
@@ -334,7 +381,7 @@ def main():
     # Ensure selected holidays are valid for the current month (prevents errors when changing months)
     st.session_state["holidays_multiselect"] = [d for d in st.session_state["holidays_multiselect"] if d in all_month_dates]
     
-    holidays = st.sidebar.multiselect(t["holidays"], all_month_dates, key="holidays_multiselect", help=t["holidays_help"])
+    selected_holidays = st.sidebar.multiselect(t["holidays"], all_month_dates, key="holidays_multiselect", help=t["holidays_help"])
     
     # --- Conditional Rules ---
     st.sidebar.subheader(t["rule_header"])
@@ -396,14 +443,17 @@ def main():
         with c7:
             mixed_ok = st.checkbox(t["mixed_ok"], value=True, help=t["mixed_ok_help"])
         
-        c_row2_1, c_row2_2, c_row2_3 = st.columns([1, 1, 1])
+        num_days = calendar.monthrange(year, month)[1]
+        date_options = [date(year, month, day).strftime("%Y-%m-%d") for day in range(1, num_days + 1)]
+        
+        c_row2_1, c_row2_2, c_row2_3, c_row2_4 = st.columns([1, 1, 1, 1])
         with c_row2_1:
             busy_days = st.multiselect(t["busy_days"], DAYS_OF_WEEK, format_func=translate_day)
         with c_row2_2:
-            num_days = calendar.monthrange(year, month)[1]
-            date_options = [date(year, month, day).strftime("%Y-%m-%d") for day in range(1, num_days + 1)]
             off_dates = st.multiselect(t["off_dates"], date_options)
         with c_row2_3:
+            leave_dates = st.multiselect(t["leave_dates"], date_options)
+        with c_row2_4:
             fixed_dates = st.multiselect(t["fixed_dates"], date_options)
             
         add_btn = st.button(t["add_btn"], use_container_width=True)
@@ -419,6 +469,7 @@ def main():
                 "mixed_gender_allowed": mixed_ok,
                 "busy_days": ", ".join(busy_days),
                 "off_dates": ", ".join(off_dates),
+                "leave_dates": ", ".join(leave_dates),
                 "fixed_dates": ", ".join(fixed_dates),
                 "duty_count": 0, # Runtime tracker
                 "weekend_duty_count": 0 # Runtime tracker
@@ -445,12 +496,14 @@ def main():
             df_personnel["busy_days"] = ""
         if "off_dates" not in df_personnel.columns:
             df_personnel["off_dates"] = ""
+        if "leave_dates" not in df_personnel.columns:
+            df_personnel["leave_dates"] = ""
         if "fixed_dates" not in df_personnel.columns:
             df_personnel["fixed_dates"] = ""
             
         # Editable Dataframe
         edited_df = st.data_editor(
-            df_personnel[["name", "gender", "fixed_duties_total", "max_duties", "fixed_duties_weekend", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "fixed_dates", "duty_count"]],
+            df_personnel[["name", "gender", "fixed_duties_total", "max_duties", "fixed_duties_weekend", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "leave_dates", "fixed_dates", "duty_count"]],
             column_config={
                 "name": t["name"],
                 "gender": st.column_config.SelectboxColumn(t["gender"], options=["M", "F"], required=True),
@@ -461,6 +514,7 @@ def main():
                 "mixed_gender_allowed": st.column_config.CheckboxColumn(t["mixed_ok"]),
                 "busy_days": st.column_config.TextColumn(t["busy_days"], help=t["col_busy_help"]),
                 "off_dates": st.column_config.TextColumn(t["off_dates"], help=t["col_off_help"]),
+                "leave_dates": st.column_config.TextColumn(t["leave_dates"], help=t["col_leave_help"]),
                 "fixed_dates": st.column_config.TextColumn(t["fixed_dates"], help=t["col_fixed_help"]),
                 "duty_count": st.column_config.NumberColumn(t["col_assigned"], disabled=True, help=t["col_assigned_help"])
             },
@@ -537,7 +591,7 @@ def main():
             'allow_consecutive': allow_consecutive,
             'conditional_rules': scheduler_rules,
             'require_two_rest_days': require_two_rest,
-            'holidays': holidays
+            'holidays': selected_holidays
         }
 
         # Initialize Scheduler
@@ -567,23 +621,38 @@ def main():
 
             df_res = pd.DataFrame(display_data)
             
-            # Show Table
-            st.dataframe(df_res, use_container_width=True)
+            # --- TABS ---
+            tab_list, tab_cal, tab_stats = st.tabs([t["list_view"], t["cal_view"], t["stats"]])
+            
+            with tab_list:
+                st.dataframe(df_res, use_container_width=True)
+                
+            with tab_cal:
+                cal_html = get_calendar_html(year, month, schedule, t)
+                st.markdown(cal_html, unsafe_allow_html=True)
             
             # Show Stats
-            st.subheader(t["stats"])
-            stats = []
-            for p in st.session_state.personnel:
-                stats.append({
-                    t["name"]: p['name'],
-                    t["col_assigned"]: p['duty_count'],
-                    t["type_wknd"]: p['weekend_duty_count']
-                })
-            st.dataframe(pd.DataFrame(stats))
-            
-            # Chart
-            st.caption("Duty Distribution / Nöbet Dağılımı")
-            st.bar_chart(pd.DataFrame(stats).set_index(t["name"])[[t["col_assigned"], t["type_wknd"]]])
+            with tab_stats:
+                stats = []
+                duty_counts = []
+                for p in st.session_state.personnel:
+                    stats.append({
+                        t["name"]: p['name'],
+                        t["col_assigned"]: p['duty_count'],
+                        t["type_wknd"]: p['weekend_duty_count']
+                    })
+                    duty_counts.append(p['duty_count'])
+                
+                # Fairness Metric
+                if len(duty_counts) > 1:
+                    stdev = statistics.stdev(duty_counts)
+                    st.metric(label=t["fairness_score"], value=f"{stdev:.2f}", help=t["fairness_help"])
+                
+                st.dataframe(pd.DataFrame(stats), use_container_width=True)
+                
+                # Chart
+                st.caption("Duty Distribution / Nöbet Dağılımı")
+                st.bar_chart(pd.DataFrame(stats).set_index(t["name"])[[t["col_assigned"], t["type_wknd"]]])
             
             # --- Export Section ---
             st.divider()

@@ -92,7 +92,13 @@ class DutyScheduler:
             if current_date.strftime("%Y-%m-%d") in [d.strip() for d in off_dates_str.split(',')]:
                 return False
 
-        # 8. Conditional Weekday Rules (e.g., If Wed then No Sat)
+        # 8. Leave Dates
+        leave_dates_str = person.get('leave_dates', '')
+        if leave_dates_str:
+            if current_date.strftime("%Y-%m-%d") in [d.strip() for d in leave_dates_str.split(',')]:
+                return False
+
+        # 9. Conditional Weekday Rules (e.g., If Wed then No Sat)
         # config['conditional_rules'] = [{'trigger': 2, 'forbidden': 5}, ...] (0=Mon, 6=Sun)
         conditional_rules = self.config.get('conditional_rules', [])
         if conditional_rules:

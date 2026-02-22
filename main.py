@@ -11,6 +11,9 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+import urllib.request
 import holidays as holidays_lib
 import statistics
 
@@ -369,6 +372,24 @@ def main():
             return DAYS_TR[DAYS_OF_WEEK.index(day_en)]
         return day_en
 
+    if 'personnel' not in st.session_state:
+        # Load full project state
+        db_data = load_db(st.session_state.get('username'))
+        st.session_state.personnel = db_data.get("personnel", [])
+        
+        # Restore other settings if available
+        if "conditional_rules" in db_data:
+            st.session_state.conditional_rules = db_data["conditional_rules"]
+        if "forbidden_pairs" in db_data:
+            st.session_state.forbidden_pairs = db_data["forbidden_pairs"]
+        if "holidays_multiselect" in db_data:
+            st.session_state.holidays_multiselect = db_data["holidays_multiselect"]
+            
+        # Restore config widgets (Streamlit handles this if we set the key in session_state)
+        for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_gender", "cfg_consecutive", "cfg_two_rest"]:
+            if key in db_data:
+                st.session_state[key] = db_data[key]
+
     with col_header:
         st.title(t["title"])
 
@@ -497,24 +518,6 @@ def main():
     # --- Main Area: Personnel Management ---
     st.header(t["header_personnel"])
     
-    if 'personnel' not in st.session_state:
-        # Load full project state
-        db_data = load_db(st.session_state.get('username'))
-        st.session_state.personnel = db_data.get("personnel", [])
-        
-        # Restore other settings if available
-        if "conditional_rules" in db_data:
-            st.session_state.conditional_rules = db_data["conditional_rules"]
-        if "forbidden_pairs" in db_data:
-            st.session_state.forbidden_pairs = db_data["forbidden_pairs"]
-        if "holidays_multiselect" in db_data:
-            st.session_state.holidays_multiselect = db_data["holidays_multiselect"]
-            
-        # Restore config widgets (Streamlit handles this if we set the key in session_state)
-        for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_gender", "cfg_consecutive", "cfg_two_rest"]:
-            if key in db_data:
-                st.session_state[key] = db_data[key]
-
     # Form to add new person
     with st.expander(t["add_expander"], expanded=True):
         c1, c2, c3, c4, c5, c6, c7 = st.columns([3, 1, 1, 1, 1, 1, 1])
@@ -846,8 +849,30 @@ def main():
             elements = []
             styles = getSampleStyleSheet()
             
+            # --- Font Registration for Turkish Support ---
+            font_name = 'Helvetica' # Default fallback
+            font_name_bold = 'Helvetica-Bold'
+            try:
+                font_path_reg = "Roboto-Regular.ttf"
+                font_path_bold = "Roboto-Bold.ttf"
+                
+                if not os.path.exists(font_path_reg):
+                    urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf", font_path_reg)
+                
+                if not os.path.exists(font_path_bold):
+                    urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf", font_path_bold)
+                
+                pdfmetrics.registerFont(TTFont('Roboto', font_path_reg))
+                pdfmetrics.registerFont(TTFont('Roboto-Bold', font_path_bold))
+                font_name = 'Roboto'
+                font_name_bold = 'Roboto-Bold'
+            except Exception as e:
+                st.warning(f"Could not load custom fonts, Turkish characters might not display correctly. Error: {e}")
+
             # Title
-            elements.append(Paragraph(f"{t['title']} - {year}/{month}", styles['Title']))
+            title_style = styles['Title']
+            title_style.fontName = font_name_bold
+            elements.append(Paragraph(f"{t['title']} - {gen_year}/{gen_month}", title_style))
             
             # Table
             data = [df_res.columns.to_list()] + df_res.values.tolist()
@@ -856,7 +881,8 @@ def main():
                 ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 0), (-1, 0), font_name_bold),
+                ('FONTNAME', (0, 1), (-1, -1), font_name),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
                 ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
                 ('GRID', (0, 0), (-1, -1), 1, colors.black),

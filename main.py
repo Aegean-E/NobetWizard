@@ -889,22 +889,43 @@ def main():
         if "fixed_dates" not in df_personnel.columns:
             df_personnel["fixed_dates"] = ""
             
+        # Helper to convert comma-separated strings to lists for the editor
+        def str_to_list(val):
+            if isinstance(val, list): return val
+            if not val or val == "": return []
+            return [x.strip() for x in str(val).split(",") if x.strip()]
+
+        # Create a copy for the editor with list types
+        df_editor = df_personnel.copy()
+        for col in ["busy_days", "off_dates", "leave_dates", "fixed_dates"]:
+            df_editor[col] = df_editor[col].apply(str_to_list)
+
+        # Translate roles for display
+        role_map_display = {
+            "Junior": t["role_junior"],
+            "Senior": t["role_senior"]
+        }
+        # Reverse map for saving
+        role_map_save = {v: k for k, v in role_map_display.items()}
+
+        df_editor["role"] = df_editor["role"].map(role_map_display).fillna(df_editor["role"])
+
         # Editable Dataframe
         edited_df = st.data_editor(
-            df_personnel[["name", "gender", "role", "fixed_duties_total", "max_duties", "fixed_duties_weekend", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "leave_dates", "fixed_dates", "duty_count", "weekend_duty_count"]],
+            df_editor[["name", "gender", "role", "fixed_duties_total", "max_duties", "fixed_duties_weekend", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "leave_dates", "fixed_dates", "duty_count", "weekend_duty_count"]],
             column_config={
                 "name": t["name"],
                 "gender": st.column_config.SelectboxColumn(t["gender"], options=["M", "F"], required=True),
-                "role": st.column_config.SelectboxColumn(t["role"], options=["Junior", "Senior"], required=True),
+                "role": st.column_config.SelectboxColumn(t["role"], options=[t["role_junior"], t["role_senior"]], required=True),
                 "fixed_duties_total": st.column_config.NumberColumn(t["fixed_total"], min_value=0, step=1, help=t["fixed_total_help"]),
                 "fixed_duties_weekend": st.column_config.NumberColumn(t["fixed_wknd"], min_value=0, step=1, help=t["fixed_wknd_help"]),
                 "max_duties": st.column_config.NumberColumn(t["max_duties"], min_value=0, step=1),
                 "max_weekends": st.column_config.NumberColumn(t["max_wknd"], min_value=0, step=1),
                 "mixed_gender_allowed": st.column_config.CheckboxColumn(t["mixed_ok"]),
-                "busy_days": st.column_config.TextColumn(t["busy_days"], help=t["col_busy_help"]),
-                "off_dates": st.column_config.TextColumn(t["off_dates"], help=t["col_off_help"]),
-                "leave_dates": st.column_config.TextColumn(t["leave_dates"], help=t["col_leave_help"]),
-                "fixed_dates": st.column_config.TextColumn(t["fixed_dates"], help=t["col_fixed_help"]),
+                "busy_days": st.column_config.ListColumn(t["busy_days"], help=t["col_busy_help"]),
+                "off_dates": st.column_config.ListColumn(t["off_dates"], help=t["col_off_help"]),
+                "leave_dates": st.column_config.ListColumn(t["leave_dates"], help=t["col_leave_help"]),
+                "fixed_dates": st.column_config.ListColumn(t["fixed_dates"], help=t["col_fixed_help"]),
                 "duty_count": st.column_config.NumberColumn(t["col_assigned"], disabled=True, help=t["col_assigned_help"]),
                 "weekend_duty_count": st.column_config.NumberColumn(t["type_wknd"], disabled=True)
             },
@@ -914,7 +935,21 @@ def main():
         )
         
         # Update session state from editor
-        st.session_state.personnel = edited_df.to_dict('records')
+        # Convert lists back to comma-separated strings for storage/scheduler compatibility
+        def list_to_str(val):
+            if isinstance(val, list):
+                return ", ".join([str(x) for x in val])
+            return val
+
+        df_saved = edited_df.copy()
+        
+        # Translate roles back to internal values
+        df_saved["role"] = df_saved["role"].map(role_map_save).fillna(df_saved["role"])
+        
+        for col in ["busy_days", "off_dates", "leave_dates", "fixed_dates"]:
+            df_saved[col] = df_saved[col].apply(list_to_str)
+            
+        st.session_state.personnel = df_saved.to_dict('records')
 
     else:
         st.info(t["info_start"])
@@ -991,6 +1026,8 @@ def main():
     with col_act5:
         if st.button(t["clear_all"], use_container_width=True):
             st.session_state.personnel = []
+            st.session_state.generated_schedule = {}
+            st.session_state.schedule_success = False
             st.rerun()
 
     with col_act6:
@@ -1109,39 +1146,40 @@ def main():
             
             st.dataframe(pd.DataFrame(stats), use_container_width=True)
             
-            # Chart
-            st.caption("Duty Distribution / Nöbet Dağılımı")
-            st.bar_chart(pd.DataFrame(stats).set_index(t["name"])[[t["col_assigned"], t["type_wknd"]]])
-            
-            st.divider()
-            
-            # 1. Day Distribution Heatmap
-            st.subheader(t["day_distribution"])
-            day_counts = {p['name']: {day: 0 for day in t["short_days"]} for p in st.session_state.personnel}
-            for d, team in schedule.items():
-                day_idx = d.weekday()
-                day_name = t["short_days"][day_idx]
-                for p in team:
-                    day_counts[p['name']][day_name] += 1
-            
-            df_days = pd.DataFrame(day_counts).T
-            st.dataframe(df_days.style.background_gradient(cmap="Blues", axis=1), use_container_width=True)
-
-            # 2. Co-occurrence Matrix
-            st.subheader(t["co_occurrence"])
-            names = [p['name'] for p in st.session_state.personnel]
-            if len(names) > 0:
-                co_matrix = pd.DataFrame(0, index=names, columns=names)
-                for team in schedule.values():
-                    t_names = [p['name'] for p in team]
-                    for i in range(len(t_names)):
-                        for j in range(i + 1, len(t_names)):
-                            p1, p2 = t_names[i], t_names[j]
-                            co_matrix.loc[p1, p2] += 1
-                            co_matrix.loc[p2, p1] += 1
+            if stats:
+                # Chart
+                st.caption("Duty Distribution / Nöbet Dağılımı")
+                st.bar_chart(pd.DataFrame(stats).set_index(t["name"])[[t["col_assigned"], t["type_wknd"]]])
                 
-                # Display with gradient
-                st.dataframe(co_matrix.style.background_gradient(cmap="Reds"), use_container_width=True)
+                st.divider()
+                
+                # 1. Day Distribution Heatmap
+                st.subheader(t["day_distribution"])
+                day_counts = {p['name']: {day: 0 for day in t["short_days"]} for p in st.session_state.personnel}
+                for d, team in schedule.items():
+                    day_idx = d.weekday()
+                    day_name = t["short_days"][day_idx]
+                    for p in team:
+                        day_counts[p['name']][day_name] += 1
+                
+                df_days = pd.DataFrame(day_counts).T
+                st.dataframe(df_days.style.background_gradient(cmap="Blues", axis=1), use_container_width=True)
+
+                # 2. Co-occurrence Matrix
+                st.subheader(t["co_occurrence"])
+                names = [p['name'] for p in st.session_state.personnel]
+                if len(names) > 0:
+                    co_matrix = pd.DataFrame(0, index=names, columns=names)
+                    for team in schedule.values():
+                        t_names = [p['name'] for p in team]
+                        for i in range(len(t_names)):
+                            for j in range(i + 1, len(t_names)):
+                                p1, p2 = t_names[i], t_names[j]
+                                co_matrix.loc[p1, p2] += 1
+                                co_matrix.loc[p2, p1] += 1
+                    
+                    # Display with gradient
+                    st.dataframe(co_matrix.style.background_gradient(cmap="Reds"), use_container_width=True)
 
 if __name__ == '__main__':
     if st.runtime.exists():

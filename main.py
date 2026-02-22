@@ -125,7 +125,8 @@ LANG_TEXT = {
         "role_junior": "Junior",
         "min_seniors": "Min. Seniors per Shift",
         "confirm_yes": "Yes, I'm sure",
-        "confirm_no": "Cancel"
+        "confirm_no": "Cancel",
+        "placeholder_select": "Choose options"
     },
     "Türkçe": {
         "title": "🧙‍♂️ Nöbet Sihirbazı",
@@ -227,7 +228,8 @@ LANG_TEXT = {
         "role_junior": "Kıdemsiz",
         "min_seniors": "Vardiya Başı Min. Kıdemli",
         "confirm_yes": "Evet, Eminim",
-        "confirm_no": "İptal"
+        "confirm_no": "İptal",
+        "placeholder_select": "Seçiniz"
     }
 }
 
@@ -571,7 +573,7 @@ def main():
     # Ensure selected holidays are valid for the current month (prevents errors when changing months)
     st.session_state["holidays_multiselect"] = [d for d in st.session_state["holidays_multiselect"] if d in all_month_dates]
     
-    selected_holidays = st.sidebar.multiselect(t["holidays"], all_month_dates, key="holidays_multiselect", help=t["holidays_help"])
+    selected_holidays = st.sidebar.multiselect(t["holidays"], all_month_dates, key="holidays_multiselect", help=t["holidays_help"], placeholder=t["placeholder_select"])
     
     # --- Conditional Rules ---
     st.sidebar.subheader(t["rule_header"])
@@ -672,9 +674,9 @@ def main():
         
         c_row2_1, c_row2_2, c_row2_3, c_row2_4 = st.columns([1, 1, 1, 1])
         with c_row2_1:
-            busy_days = st.multiselect(t["busy_days"], DAYS_OF_WEEK, format_func=translate_day)
+            busy_days = st.multiselect(t["busy_days"], DAYS_OF_WEEK, format_func=translate_day, placeholder=t["placeholder_select"])
         with c_row2_2:
-            off_dates = st.multiselect(t["off_dates"], date_options)
+            off_dates = st.multiselect(t["off_dates"], date_options, placeholder=t["placeholder_select"])
         with c_row2_3:
             leave_range = st.date_input(
                 t["leave_dates"],
@@ -684,7 +686,7 @@ def main():
                 format="DD/MM/YYYY"
             )
         with c_row2_4:
-            fixed_dates = st.multiselect(t["fixed_dates"], date_options)
+            fixed_dates = st.multiselect(t["fixed_dates"], date_options, placeholder=t["placeholder_select"])
             
         add_btn = st.button(t["add_btn"], use_container_width=True)
 

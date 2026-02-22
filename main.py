@@ -131,12 +131,18 @@ LANG_TEXT = {
         "btn_reset_month": "🔄 Start New Month (Reset Dates)",
         "reset_month_help": "Keeps personnel profiles but clears specific date constraints (Busy, Off, Leave, Fixed) for a fresh month.",
         "reset_success": "Date constraints cleared for the new month!",
-        "tools_expander": "🛠️ Personnel Tools (Leave & Busy Days)",
+        "tools_expander": "🛠️ Personnel Tools (Leave, Busy, Off, Fixed)",
         "header_leave": "Add Leave Range",
         "header_busy": "Manage Busy Days",
+        "header_off": "Manage Off Dates",
+        "header_fixed": "Manage Fixed Duties",
         "btn_add_leave": "Add Leave Range",
         "btn_save_busy": "Update Busy Days",
-        "busy_updated": "Busy days updated for {}!"
+        "btn_save_off": "Update Off Dates",
+        "btn_save_fixed": "Update Fixed Duties",
+        "busy_updated": "Busy days updated for {}!",
+        "off_updated": "Off dates updated for {}!",
+        "fixed_updated": "Fixed duties updated for {}!"
     },
     "Türkçe": {
         "title": "🧙‍♂️ Nöbet Sihirbazı",
@@ -244,12 +250,18 @@ LANG_TEXT = {
         "btn_reset_month": "🔄 Yeni Ay Başlat (Tarihleri Sıfırla)",
         "reset_month_help": "Personel profillerini korur ancak aya özel tarihleri (Mazeret, İzin, Sabit) temizler.",
         "reset_success": "Yeni ay için tarih kısıtlamaları temizlendi!",
-        "tools_expander": "🛠️ Personel Araçları (İzin & Meşgul Günler)",
+        "tools_expander": "🛠️ Personel Araçları (İzin, Meşgul, İzinli, Sabit)",
         "header_leave": "İzin Aralığı Ekle",
         "header_busy": "Meşgul Günleri Yönet",
+        "header_off": "İzinli Tarihleri Yönet",
+        "header_fixed": "Sabit Nöbetleri Yönet",
         "btn_add_leave": "İzin Aralığı Ekle",
         "btn_save_busy": "Meşgul Günleri Güncelle",
-        "busy_updated": "{} için meşgul günler güncellendi!"
+        "btn_save_off": "İzinli Tarihleri Güncelle",
+        "btn_save_fixed": "Sabit Nöbetleri Güncelle",
+        "busy_updated": "{} için meşgul günler güncellendi!",
+        "off_updated": "{} için izinli tarihler güncellendi!",
+        "fixed_updated": "{} için sabit nöbetler güncellendi!"
     }
 }
 
@@ -970,10 +982,14 @@ def main():
     # --- Personnel Tools ---
     if st.session_state.personnel:
         with st.expander(t["tools_expander"]):
-            tab_leave, tab_busy = st.tabs([t["header_leave"], t["header_busy"]])
+            tab_leave, tab_busy, tab_off, tab_fixed = st.tabs([t["header_leave"], t["header_busy"], t["header_off"], t["header_fixed"]])
             
             person_names = [p['name'] for p in st.session_state.personnel]
             
+            # Calculate date options for the current month
+            num_days = calendar.monthrange(year, month)[1]
+            date_options = [date(year, month, day).strftime("%d/%m/%Y") for day in range(1, num_days + 1)]
+
             with tab_leave:
                 c_b1, c_b2, c_b3 = st.columns([2, 2, 1])
                 with c_b1:
@@ -1033,6 +1049,80 @@ def main():
                             if p['name'] == selected_person_busy:
                                 p['busy_days'] = ", ".join(new_busy_days)
                                 st.toast(t["busy_updated"].format(selected_person_busy), icon="✅")
+                                st.rerun()
+
+            with tab_off:
+                c_o1, c_o2, c_o3 = st.columns([2, 2, 1])
+                with c_o1:
+                    selected_person_off = st.selectbox(t["name"], person_names, key="tool_off_person")
+                
+                # Get current off dates
+                current_off = []
+                for p in st.session_state.personnel:
+                    if p['name'] == selected_person_off:
+                        if p.get('off_dates'):
+                            current_off = [d.strip() for d in p['off_dates'].split(',') if d.strip()]
+                        break
+                
+                # Filter for current month to set as default
+                default_off = [d for d in current_off if d in date_options]
+
+                with c_o2:
+                    new_off_dates = st.multiselect(
+                        t["off_dates"], 
+                        date_options, 
+                        default=default_off,
+                        placeholder=t["placeholder_select"],
+                        key="tool_off_select"
+                    )
+                
+                with c_o3:
+                    st.write("")
+                    st.write("")
+                    if st.button(t["btn_save_off"], use_container_width=True, key="btn_tool_off"):
+                        for p in st.session_state.personnel:
+                            if p['name'] == selected_person_off:
+                                # Preserve dates from other months
+                                other_dates = [d for d in current_off if d not in date_options]
+                                all_dates = other_dates + new_off_dates
+                                p['off_dates'] = ", ".join(all_dates)
+                                st.toast(t["off_updated"].format(selected_person_off), icon="✅")
+                                st.rerun()
+
+            with tab_fixed:
+                c_f1, c_f2, c_f3 = st.columns([2, 2, 1])
+                with c_f1:
+                    selected_person_fixed = st.selectbox(t["name"], person_names, key="tool_fixed_person")
+                
+                # Get current fixed dates
+                current_fixed = []
+                for p in st.session_state.personnel:
+                    if p['name'] == selected_person_fixed:
+                        if p.get('fixed_dates'):
+                            current_fixed = [d.strip() for d in p['fixed_dates'].split(',') if d.strip()]
+                        break
+                
+                default_fixed = [d for d in current_fixed if d in date_options]
+
+                with c_f2:
+                    new_fixed_dates = st.multiselect(
+                        t["fixed_dates"], 
+                        date_options, 
+                        default=default_fixed,
+                        placeholder=t["placeholder_select"],
+                        key="tool_fixed_select"
+                    )
+                
+                with c_f3:
+                    st.write("")
+                    st.write("")
+                    if st.button(t["btn_save_fixed"], use_container_width=True, key="btn_tool_fixed"):
+                        for p in st.session_state.personnel:
+                            if p['name'] == selected_person_fixed:
+                                other_dates = [d for d in current_fixed if d not in date_options]
+                                all_dates = other_dates + new_fixed_dates
+                                p['fixed_dates'] = ", ".join(all_dates)
+                                st.toast(t["fixed_updated"].format(selected_person_fixed), icon="✅")
                                 st.rerun()
 
     # --- Save / Load Section ---

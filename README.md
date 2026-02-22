@@ -1,5 +1,7 @@
 # 🧙‍♂️ Nöbet Wizard (Duty Roster Generator)
 
+[**Live Demo**](https://nobetwizard.streamlit.app/)
+
 **Nöbet Wizard** is a powerful, web-based application built with Python and Streamlit designed to automate the creation of monthly duty rosters (nöbet listesi). It handles complex constraints, personnel preferences, and fair distribution rules to generate optimal schedules in seconds.
 
 ## 🌟 Features
@@ -8,35 +10,62 @@
 *   **Detailed Profiles:** Manage staff with attributes like Name, Gender, and Max Duty limits.
 *   **Availability Constraints:**
     *   **Busy Days:** Block specific days of the week (e.g., "No Mondays").
-    *   **Off Dates:** Block specific calendar dates (e.g., holidays or leave).
-    *   **Fixed Duties:** Force assignment on specific dates.
+    *   **Off Dates:** Block specific calendar dates (e.g., holidays or specific appointments).
+    *   **Leave Dates:** Define date ranges for annual leave (Yıllık İzin).
+    *   **Fixed Duties:** Force assignment on specific dates (Priority assignment).
+*   **Workload Targets:**
+    *   **Max Duties:** Set a hard limit on the total number of duties per month.
+    *   **Max Weekend Duties:** Set a hard limit on weekend shifts.
+    *   **Fixed Total:** Set a *target* number of duties. The scheduler prioritizes these individuals to reach this number.
+    *   **Fixed Weekend:** Set a *target* number of weekend duties.
 *   **Preferences:**
-    *   **Mixed Gender:** Option to opt-out of mixed-gender teams.
-    *   **Fixed Duty Count:** Set a target number of duties to override maximums.
-*   **User-Specific Database:** Personnel lists are saved to your user profile.
+    *   **Mixed Gender:** Option to opt-out of mixed-gender teams (e.g., a person who prefers not to be on a mixed team).
+*   **Editable Grid:** Inline editing of all personnel data for quick adjustments.
+*   **Persistence:**
+    *   **User-Specific Database:** Personnel lists are saved to your user profile (Local JSON or Cloud Firestore).
+    *   **Import/Export:** Save and load personnel lists via CSV or JSON.
 
-### ⚙️ Scheduling Rules
+### ⚙️ Scheduling Rules & Constraints
 *   **Team Composition:** Configure number of people per day.
 *   **Gender Rules:**
-    *   *Any*: No restrictions.
-    *   *Mixed*: Requires at least one Male and one Female per shift.
+    *   *Any*: No restrictions on team composition.
+    *   *Mixed*: Requires at least one Male and one Female per shift (if team size > 1).
     *   *Single Gender*: Teams must be all Male or all Female.
-*   **Rest Rules:**
-    *   **Consecutive Days:** Allow or disallow back-to-back duties.
-    *   **2-Day Rest:** Prevent duties on alternate days (e.g., Mon -> Wed forbidden).
-*   **Conditional Logic:** Create custom rules like "If someone holds duty on Wednesday, they cannot hold duty on Saturday".
+*   **Rest & Spacing Rules:**
+    *   **Consecutive Days:** Toggle to allow or disallow back-to-back duties (e.g., Mon & Tue).
+    *   **2-Day Rest (Nöbet Arası 2 Gün):** Prevent duties on alternate days (e.g., Mon -> Wed forbidden, must wait until Thu).
+    *   **Weekly Limits:** Soft constraint to prevent burnout (max ~3 duties per week).
+*   **Advanced Logic:**
+    *   **Conditional Rules:** Create custom logic like "If someone holds duty on Wednesday, they cannot hold duty on Saturday".
+    *   **Incompatible Pairs:** Define pairs of people who should **never** work together (Conflict resolution).
+*   **Holidays:**
+    *   **Manual Selection:** Mark specific dates to be treated as weekends (affecting weekend counts and coloring).
+    *   **Auto-Load:** One-click integration to fetch Turkish National Holidays for the selected year.
 
-### 📊 Output & Export
-*   **Interactive Calendar:** View the generated schedule in a table format.
-*   **Statistics:** Track total duties and weekend shifts per person.
-*   **Export:** Download the final roster as **Excel (.xlsx)** or **PDF**.
+### 📊 Output & Visualization
+*   **Multiple Views:**
+    *   **List View:** A sortable data table of the generated schedule.
+    *   **Calendar View:** A visual monthly calendar grid (Dark Mode compatible) showing assignments.
+    *   **Statistics:** Detailed breakdown of total and weekend duties per person.
+*   **Fairness Metrics:**
+    *   **Fairness Score:** Calculates the Standard Deviation of duty counts to mathematically quantify how equal the distribution is (Lower is better).
+    *   **Visual Charts:** Bar charts to visualize duty distribution.
+*   **Export:**
+    *   **Excel (.xlsx):** Download formatted spreadsheets.
+    *   **PDF:** Download professional-looking PDF reports.
 
 ### 🌍 Localization
 *   Full support for **English** and **Turkish** (Türkçe) languages.
+*   UI elements, day names, and help text dynamically translate.
 
-### 🔐 Security
+### 🔐 Security & Cloud
+*   **Authentication:**
 *   Built-in Login/Register system.
 *   Secure password hashing.
+    *   **Super Admin Fallback:** Configurable via Streamlit Secrets for emergency access.
+*   **Cloud Persistence (Optional):**
+    *   Supports **Google Cloud Firestore** to save user data and rosters across app restarts (essential for Streamlit Cloud deployments).
+    *   Falls back to local JSON files if cloud secrets are not configured.
 
 ---
 
@@ -60,27 +89,56 @@
 2.  **Login / Register**:
     *   Create a new account on the "Register" tab.
     *   Log in to access your dashboard.
+    *   *Tip: If configured, use Admin credentials from secrets.*
 
 3.  **Workflow**:
     *   **General Settings:** Select the Year and Month.
-    *   **Rules:** Set personnel per day and gender constraints.
-    *   **Personnel:** Add your team members. Use the "Edit" table to fine-tune constraints.
+    *   **Rules:** Set personnel per day, gender constraints, and rest rules.
+    *   **Personnel:** Add your team members. Use the "Edit" table to fine-tune constraints like "Busy Days" or "Leave Dates".
+    *   **Advanced:** Add conditional rules or incompatible pairs in the sidebar.
     *   **Generate:** Click "Create Nöbet List".
-    *   **Export:** Download your schedule.
+    *   **Analyze:** Check the "Calendar View" and "Statistics" tabs.
+    *   **Export:** Download your schedule as PDF or Excel.
+
+---
+
+## ☁️ Deployment & Secrets
+
+To enable Cloud Persistence (Firestore) and Admin access, create a `.streamlit/secrets.toml` file or configure secrets in your hosting dashboard:
+
+```toml
+[admin]
+username = "admin"
+password = "YourStrongPassword"
+
+[firestore]
+type = "service_account"
+project_id = "your-project-id"
+private_key_id = "..."
+private_key = "-----BEGIN PRIVATE KEY-----..."
+client_email = "..."
+client_id = "..."
+auth_uri = "https://accounts.google.com/o/oauth2/auth"
+token_uri = "https://oauth2.googleapis.com/token"
+auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+client_x509_cert_url = "..."
+```
 
 ---
 
 ## 🛠️ Technologies Used
 
 *   **Streamlit:** Web interface and state management.
-*   **Pandas:** Data manipulation.
+*   **Pandas:** Data manipulation and Excel export.
 *   **ReportLab:** PDF generation.
-*   **OpenPyXL:** Excel export.
-*   **Python Standard Library:** `calendar`, `random`, `hashlib`, `json`.
+*   **OpenPyXL:** Excel engine.
+*   **Holidays:** Automated holiday fetching.
+*   **Google Cloud Firestore:** NoSQL database for cloud persistence.
+*   **Python Standard Library:** `calendar`, `random`, `hashlib`, `json`, `statistics`.
 
 ## 📂 Project Structure
 
 *   `main.py`: The main application entry point and UI logic.
 *   `scheduler.py`: The core algorithm for constraint satisfaction and schedule generation.
 *   `requirements.txt`: Python dependencies.
-*   `*_db.json`: Local storage for users and personnel data.
+*   `*_db.json`: Local storage for users and personnel data (used if Firestore is not configured).

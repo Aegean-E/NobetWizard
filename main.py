@@ -28,10 +28,10 @@ except ImportError:
 LANG_TEXT = {
     "English": {
         "title": "🧙‍♂️ Nöbet Wizard (Duty Roster Generator)",
-        "sidebar_gen": "1. General Settings",
+        "sidebar_gen": "General Settings",
         "year": "Year",
         "month": "Month",
-        "sidebar_rules": "2. Rules",
+        "sidebar_rules": "Rules",
         "ppl_day": "Personnel per Day",
         "gender_rules": "Gender Rules",
         "gender_help": "Mixed: Requires at least one Male and one Female per shift.",
@@ -68,8 +68,7 @@ LANG_TEXT = {
         "clear_all": "🗑️ Clear Current List",
         "clear_db_btn": "🔥 Clear Personnel Database",
         "info_start": "Please add personnel to start.",
-        "header_gen": "Generate Schedule",
-        "btn_gen": "🪄 Create Nöbet List",
+        "btn_gen": "🪄 Create Duty List",
         "err_no_pers": "No personnel added!",
         "spinner": "Calculating optimal schedule...",
         "success": "Schedule generated successfully!",
@@ -120,7 +119,9 @@ LANG_TEXT = {
         "conflict_desc": "🚫 {} & {}",
         "template_download": "📥 Download Excel Template",
         "co_occurrence": "🤝 Team Co-occurrence (Who works with whom?)",
-        "day_distribution": "📅 Day of Week Distribution"
+        "day_distribution": "📅 Day of Week Distribution",
+        "confirm_yes": "Yes, I'm sure",
+        "confirm_no": "Cancel"
     },
     "Türkçe": {
         "title": "🧙‍♂️ Nöbet Sihirbazı",
@@ -216,7 +217,9 @@ LANG_TEXT = {
         "conflict_desc": "🚫 {} & {}",
         "template_download": "📥 Excel Şablonu İndir",
         "co_occurrence": "🤝 Birlikte Çalışma Sıklığı",
-        "day_distribution": "📅 Gün Bazlı Dağılım"
+        "day_distribution": "📅 Gün Bazlı Dağılım",
+        "confirm_yes": "Evet, Eminim",
+        "confirm_no": "İptal"
     }
 }
 
@@ -601,7 +604,11 @@ def main():
                     st.rerun()
 
     # --- Main Area: Personnel Management ---
-    st.header(t["header_personnel"])
+    col_header, col_gen_btn = st.columns([3, 1])
+    with col_header:
+        st.header(t["header_personnel"])
+    with col_gen_btn:
+        btn_gen_clicked = st.button(t["btn_gen"], type="primary", use_container_width=True)
     
     # Form to add new person
     with st.expander(t["add_expander"], expanded=True):
@@ -721,68 +728,81 @@ def main():
         # Update session state from editor
         st.session_state.personnel = edited_df.to_dict('records')
 
-        # --- Save / Load Section ---
-        st.divider()
-        
-        # 1. Main Actions Toolbar
-        col_act1, col_act2, col_act3 = st.columns(3)
-        
-        with col_act1:
-            if st.button(t["save_db"], use_container_width=True, type="primary"):
-                save_db(st.session_state.personnel, st.session_state.get('username'))
-                st.toast(t["db_saved"], icon="💾")
-
-        with col_act2:
-            def load_cloud_data():
-                db_data = load_db(st.session_state.get('username'))
-                st.session_state.personnel = db_data.get("personnel", [])
-                
-                # Restore other settings
-                if "conditional_rules" in db_data:
-                    st.session_state.conditional_rules = db_data["conditional_rules"]
-                if "forbidden_pairs" in db_data:
-                    st.session_state.forbidden_pairs = db_data["forbidden_pairs"]
-                if "holidays_multiselect" in db_data:
-                    st.session_state.holidays_multiselect = db_data["holidays_multiselect"]
-                
-                for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_language"]:
-                    if key in db_data:
-                        st.session_state[key] = db_data[key]
-                
-                st.toast(t["loaded"], icon="✅")
-
-            st.button(t["load_db_btn"], use_container_width=True, on_click=load_cloud_data)
-
-        with col_act3:
-            json_data = json.dumps(st.session_state.personnel, ensure_ascii=False, indent=4)
-            st.download_button(
-                label=t["download_db"],
-                data=json_data,
-                file_name="personnel_db.json",
-                mime="application/json",
-                use_container_width=True
-            )
-            
-        col_act4, col_act5 = st.columns(2)
-        
-        with col_act4:
-            if st.button(t["clear_all"], use_container_width=True):
-                st.session_state.personnel = []
-                st.rerun()
-
-        with col_act5:
-            if st.button(t["clear_db_btn"], use_container_width=True, type="primary"):
-                # Save empty personnel list to DB to clear it
-                save_db([], st.session_state.get('username'))
-                st.toast(t["db_cleared"], icon="🔥")
     else:
         st.info(t["info_start"])
 
-    # --- Generation Section ---
+    # --- Save / Load Section ---
     st.divider()
-    st.header(t["header_gen"])
+    
+    # 1. Main Actions Toolbar
+    col_act1, col_act2, col_act3 = st.columns(3)
+    
+    with col_act1:
+        if st.button(t["save_db"], use_container_width=True):
+            save_db(st.session_state.personnel, st.session_state.get('username'))
+            st.toast(t["db_saved"], icon="💾")
 
-    if st.button(t["btn_gen"], type="primary"):
+    with col_act2:
+        def load_cloud_data():
+            db_data = load_db(st.session_state.get('username'))
+            st.session_state.personnel = db_data.get("personnel", [])
+            
+            # Restore other settings
+            if "conditional_rules" in db_data:
+                st.session_state.conditional_rules = db_data["conditional_rules"]
+            if "forbidden_pairs" in db_data:
+                st.session_state.forbidden_pairs = db_data["forbidden_pairs"]
+            if "holidays_multiselect" in db_data:
+                st.session_state.holidays_multiselect = db_data["holidays_multiselect"]
+            
+            for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_language"]:
+                if key in db_data:
+                    st.session_state[key] = db_data[key]
+            
+            st.toast(t["loaded"], icon="✅")
+
+        st.button(t["load_db_btn"], use_container_width=True, on_click=load_cloud_data)
+
+    with col_act3:
+        json_data = json.dumps(st.session_state.personnel, ensure_ascii=False, indent=4)
+        st.download_button(
+            label=t["download_db"],
+            data=json_data,
+            file_name="personnel_db.json",
+            mime="application/json",
+            use_container_width=True
+        )
+        
+    col_act4, col_act5 = st.columns(2)
+    
+    with col_act4:
+        if st.button(t["clear_all"], use_container_width=True):
+            st.session_state.personnel = []
+            st.rerun()
+
+    with col_act5:
+        if "confirm_clear_db" not in st.session_state:
+            st.session_state.confirm_clear_db = False
+        
+        if not st.session_state.confirm_clear_db:
+            if st.button(t["clear_db_btn"], use_container_width=True):
+                st.session_state.confirm_clear_db = True
+                st.rerun()
+        else:
+            c_yes, c_no = st.columns(2)
+            with c_yes:
+                if st.button(t["confirm_yes"], use_container_width=True):
+                    save_db([], st.session_state.get('username'))
+                    st.toast(t["db_cleared"], icon="🔥")
+                    st.session_state.confirm_clear_db = False
+                    st.rerun()
+            with c_no:
+                if st.button(t["confirm_no"], use_container_width=True):
+                    st.session_state.confirm_clear_db = False
+                    st.rerun()
+
+    # --- Generation Section ---
+    if btn_gen_clicked:
         if not st.session_state.personnel:
             st.error(t["err_no_pers"])
         else:
@@ -822,6 +842,7 @@ def main():
                 st.error(t["err_fail"])
 
     if st.session_state.get("schedule_success") and st.session_state.get("generated_schedule"):
+        st.divider()
         st.success(t["success"])
         schedule = st.session_state.generated_schedule
         gen_year = st.session_state.gen_year
@@ -836,7 +857,7 @@ def main():
             is_weekend = d.weekday() >= 5
             
             display_data.append({
-                t["col_date"]: d.strftime("%Y-%m-%d"),
+                t["col_date"]: d.strftime("%d/%m/%Y"),
                 t["col_day"]: day_name,
                 t["col_team"]: names,
                 t["col_type"]: t["type_wknd"] if is_weekend else t["type_wkday"]

@@ -457,11 +457,18 @@ def main():
     st.sidebar.header(t["sidebar_gen"])
     
     today = date.today()
-    year = st.sidebar.number_input(t["year"], min_value=today.year, max_value=today.year+5, value=today.year, key="cfg_year")
-    month = st.sidebar.selectbox(t["month"], range(1, 13), index=today.month-1, key="cfg_month")
+    if "cfg_year" not in st.session_state:
+        st.session_state.cfg_year = today.year
+    year = st.sidebar.number_input(t["year"], min_value=today.year, max_value=today.year+5, key="cfg_year")
+    
+    if "cfg_month" not in st.session_state:
+        st.session_state.cfg_month = today.month
+    month = st.sidebar.selectbox(t["month"], range(1, 13), key="cfg_month")
     
     st.sidebar.header(t["sidebar_rules"])
-    people_per_day = st.sidebar.number_input(t["ppl_day"], min_value=1, value=2, key="cfg_ppl")
+    if "cfg_ppl" not in st.session_state:
+        st.session_state.cfg_ppl = 2
+    people_per_day = st.sidebar.number_input(t["ppl_day"], min_value=1, key="cfg_ppl")
     
     # Map display options to internal logic keys
     gender_map = {
@@ -476,8 +483,14 @@ def main():
         help=t["gender_help"],
         key="cfg_gender"
     )
-    allow_consecutive = st.sidebar.checkbox(t["consecutive"], value=False, help=t["consecutive_help"], key="cfg_consecutive")
-    require_two_rest = st.sidebar.checkbox(t["two_day_rule"], value=False, help=t["two_day_help"], key="cfg_two_rest")
+    
+    if "cfg_consecutive" not in st.session_state:
+        st.session_state.cfg_consecutive = False
+    allow_consecutive = st.sidebar.checkbox(t["consecutive"], help=t["consecutive_help"], key="cfg_consecutive")
+    
+    if "cfg_two_rest" not in st.session_state:
+        st.session_state.cfg_two_rest = False
+    require_two_rest = st.sidebar.checkbox(t["two_day_rule"], help=t["two_day_help"], key="cfg_two_rest")
     
     # Holidays Selection
     num_days_in_month = calendar.monthrange(year, month)[1]

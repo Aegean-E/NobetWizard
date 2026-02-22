@@ -60,10 +60,13 @@ LANG_TEXT = {
         "save_csv": "💾 Save CSV",
         "load_csv": "📂 Load CSV",
         "loaded": "Loaded!",
-        "save_db": "💾 Save to DB",
+        "save_db": "💾 Save Personnel to the Database",
+        "load_db_btn": "☁️ Load Personnel Database",
         "db_saved": "Database saved to user profile!",
-        "download_db": "📥 Download DB",
-        "clear_all": "🗑️ Clear All",
+        "db_cleared": "Database cleared!",
+        "download_db": "📥 Download Personnel Database",
+        "clear_all": "🗑️ Clear Current List",
+        "clear_db_btn": "🔥 Clear Personnel Database",
         "info_start": "Please add personnel to start.",
         "header_gen": "Generate Schedule",
         "btn_gen": "🪄 Create Nöbet List",
@@ -153,10 +156,13 @@ LANG_TEXT = {
         "save_csv": "💾 CSV Kaydet",
         "load_csv": "📂 CSV Yükle",
         "loaded": "Yüklendi!",
-        "save_db": "💾 DB Kaydet",
+        "save_db": "💾 Personeli Veritabanına Kaydet",
+        "load_db_btn": "☁️ Personel Veritabanını Yükle",
         "db_saved": "Veritabanı kullanıcı profiline kaydedildi!",
-        "download_db": "📥 DB İndir",
-        "clear_all": "🗑️ Temizle",
+        "db_cleared": "Veritabanı temizlendi!",
+        "download_db": "📥 Personel Veritabanını İndir",
+        "clear_all": "🗑️ Mevcut Listeyi Temizle",
+        "clear_db_btn": "🔥 Personel Veritabanını Temizle",
         "info_start": "Başlamak için personel ekleyin.",
         "header_gen": "Takvim Oluştur",
         "btn_gen": "🪄 Nöbet Listesi Oluştur",
@@ -725,7 +731,27 @@ def main():
                 st.toast(t["db_saved"], icon="💾")
 
         with col_act2:
-            json_data = json.dumps(st.session_state.personnel, ensure_ascii=False, indent=4) # Keep download as just personnel for portability
+            if st.button(t["load_db_btn"], use_container_width=True):
+                db_data = load_db(st.session_state.get('username'))
+                st.session_state.personnel = db_data.get("personnel", [])
+                
+                # Restore other settings
+                if "conditional_rules" in db_data:
+                    st.session_state.conditional_rules = db_data["conditional_rules"]
+                if "forbidden_pairs" in db_data:
+                    st.session_state.forbidden_pairs = db_data["forbidden_pairs"]
+                if "holidays_multiselect" in db_data:
+                    st.session_state.holidays_multiselect = db_data["holidays_multiselect"]
+                
+                for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_language"]:
+                    if key in db_data:
+                        st.session_state[key] = db_data[key]
+                
+                st.toast(t["loaded"], icon="✅")
+                st.rerun()
+
+        with col_act3:
+            json_data = json.dumps(st.session_state.personnel, ensure_ascii=False, indent=4)
             st.download_button(
                 label=t["download_db"],
                 data=json_data,
@@ -734,69 +760,18 @@ def main():
                 use_container_width=True
             )
             
-        with col_act3:
+        col_act4, col_act5 = st.columns(2)
+        
+        with col_act4:
             if st.button(t["clear_all"], use_container_width=True):
                 st.session_state.personnel = []
                 st.rerun()
 
-        # 2. Import / Export Expander
-        with st.expander("📂 " + t["load_csv"] + " / " + t["save_csv"], expanded=False):
-            c_ex, c_im = st.columns(2)
-            
-            # Export Column
-            with c_ex:
-                st.caption(t["save_csv"] + " / Excel")
-                
-                # Export Format Selection
-                dl_type = st.radio("Format", ["Excel", "CSV"], horizontal=True, label_visibility="collapsed", key="dl_type_pers")
-                
-                if dl_type == "CSV":
-                    csv = edited_df.to_csv(index=False).encode('utf-8')
-                    st.download_button(f"⬇️ {t['save_csv']}", csv, "nobet_list.csv", "text/csv", use_container_width=True)
-                else:
-                    buffer_pers = BytesIO()
-                    with pd.ExcelWriter(buffer_pers, engine='openpyxl') as writer:
-                        edited_df.to_excel(writer, index=False)
-                    st.download_button(f"⬇️ {t['export_excel']}", buffer_pers.getvalue(), "nobet_list.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-                
-                st.divider()
-                
-                # Template Download
-                template_cols = ["name", "gender", "fixed_duties_total", "max_duties", "fixed_duties_weekend", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "leave_dates", "fixed_dates"]
-                df_template = pd.DataFrame(columns=template_cols)
-                buffer_template = BytesIO()
-                with pd.ExcelWriter(buffer_template, engine='openpyxl') as writer:
-                    df_template.to_excel(writer, index=False)
-                
-                st.download_button(
-                    label=f"📄 {t['template_download']}",
-                    data=buffer_template.getvalue(),
-                    file_name="personnel_template.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
-
-            # Import Column
-            with c_im:
-                st.caption(t["load_csv"])
-                uploaded_file = st.file_uploader(t["load_csv"], type=["csv", "xlsx"], label_visibility="collapsed")
-                
-                if uploaded_file:
-                    try:
-                        if uploaded_file.name.endswith('.csv'):
-                            loaded_df = pd.read_csv(uploaded_file)
-                        else:
-                            loaded_df = pd.read_excel(uploaded_file)
-                        
-                        # Sanitize boolean columns if coming from Excel
-                        if "mixed_gender_allowed" in loaded_df.columns:
-                            loaded_df["mixed_gender_allowed"] = loaded_df["mixed_gender_allowed"].astype(bool)
-                            
-                        st.session_state.personnel = loaded_df.to_dict('records')
-                        st.toast(t["loaded"], icon="✅")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+        with col_act5:
+            if st.button(t["clear_db_btn"], use_container_width=True, type="primary"):
+                # Save empty personnel list to DB to clear it
+                save_db([], st.session_state.get('username'))
+                st.toast(t["db_cleared"], icon="🔥")
     else:
         st.info(t["info_start"])
 

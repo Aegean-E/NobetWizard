@@ -21,7 +21,7 @@ class DutyScheduler:
     def is_weekend(self, d):
         # 5 = Saturday, 6 = Sunday
         # Also check if the date is in the configured holidays list
-        if d.strftime("%Y-%m-%d") in self.config.get('holidays', []):
+        if d.strftime("%d/%m/%Y") in self.config.get('holidays', []):
             return True
         return d.weekday() >= 5
 
@@ -91,13 +91,13 @@ class DutyScheduler:
         # 7. Specific Off Dates
         off_dates_str = person.get('off_dates', '')
         if off_dates_str:
-            if current_date.strftime("%Y-%m-%d") in [d.strip() for d in off_dates_str.split(',')]:
+            if current_date.strftime("%d/%m/%Y") in [d.strip() for d in off_dates_str.split(',')]:
                 return False
 
         # 8. Leave Dates
         leave_dates_str = person.get('leave_dates', '')
         if leave_dates_str:
-            if current_date.strftime("%Y-%m-%d") in [d.strip() for d in leave_dates_str.split(',')]:
+            if current_date.strftime("%d/%m/%Y") in [d.strip() for d in leave_dates_str.split(',')]:
                 return False
 
         # 9. Conditional Weekday Rules (e.g., If Wed then No Sat)
@@ -161,6 +161,13 @@ class DutyScheduler:
             for pair in forbidden_pairs:
                 if pair['p1'] in team_names and pair['p2'] in team_names:
                     return False
+        
+        # Role / Seniority Constraint
+        min_seniors = self.config.get('min_seniors', 0)
+        if min_seniors > 0 and len(team) == self.config['people_per_day']:
+            seniors_count = sum(1 for p in team if p.get('role') == 'Senior')
+            if seniors_count < min_seniors:
+                return False
                 
         return True
 
@@ -187,7 +194,7 @@ class DutyScheduler:
             # Iterate days
             for day_num in range(1, self.days_in_month + 1):
                 current_date = date(self.year, self.month, day_num)
-                current_date_str = current_date.strftime("%Y-%m-%d")
+                current_date_str = current_date.strftime("%d/%m/%Y")
                 needed_count = self.config['people_per_day']
                 day_team = []
                 

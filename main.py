@@ -120,6 +120,10 @@ LANG_TEXT = {
         "template_download": "📥 Download Excel Template",
         "co_occurrence": "🤝 Team Co-occurrence (Who works with whom?)",
         "day_distribution": "📅 Day of Week Distribution",
+        "role": "Role",
+        "role_senior": "Senior",
+        "role_junior": "Junior",
+        "min_seniors": "Min. Seniors per Shift",
         "confirm_yes": "Yes, I'm sure",
         "confirm_no": "Cancel"
     },
@@ -218,6 +222,10 @@ LANG_TEXT = {
         "template_download": "📥 Excel Şablonu İndir",
         "co_occurrence": "🤝 Birlikte Çalışma Sıklığı",
         "day_distribution": "📅 Gün Bazlı Dağılım",
+        "role": "Rol",
+        "role_senior": "Kıdemli",
+        "role_junior": "Kıdemsiz",
+        "min_seniors": "Vardiya Başı Min. Kıdemli",
         "confirm_yes": "Evet, Eminim",
         "confirm_no": "İptal"
     }
@@ -287,6 +295,16 @@ def save_db(personnel, username):
         "cfg_two_rest": st.session_state.get("cfg_two_rest"),
         "cfg_language": st.session_state.get("cfg_language")
     }
+
+    # Save generated schedule if exists (Convert date keys to strings)
+    if st.session_state.get("schedule_success") and st.session_state.get("generated_schedule"):
+        sched_serializable = {}
+        for d, team in st.session_state.generated_schedule.items():
+            sched_serializable[d.strftime("%Y-%m-%d")] = team
+        
+        state_data["generated_schedule"] = sched_serializable
+        state_data["gen_year"] = st.session_state.get("gen_year")
+        state_data["gen_month"] = st.session_state.get("gen_month")
     
     # 1. Try Cloud Database
     db = get_firestore_db()
@@ -446,6 +464,20 @@ def main():
         for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_language"]:
             if key in db_data:
                 st.session_state[key] = db_data[key]
+        
+        # Restore generated schedule
+        if "generated_schedule" in db_data:
+            try:
+                sched_loaded = {}
+                for d_str, team in db_data["generated_schedule"].items():
+                    d_obj = date.fromisoformat(d_str)
+                    sched_loaded[d_obj] = team
+                st.session_state.generated_schedule = sched_loaded
+                st.session_state.gen_year = db_data.get("gen_year")
+                st.session_state.gen_month = db_data.get("gen_month")
+                st.session_state.schedule_success = True
+            except Exception as e:
+                print(f"Error loading schedule: {e}")
 
     # --- Language Setup ---
     if "cfg_language" not in st.session_state:
@@ -493,6 +525,10 @@ def main():
         st.session_state.cfg_ppl = 2
     people_per_day = st.sidebar.number_input(t["ppl_day"], min_value=1, key="cfg_ppl")
     
+    if "cfg_min_seniors" not in st.session_state:
+        st.session_state.cfg_min_seniors = 0
+    min_seniors = st.sidebar.number_input(t["min_seniors"], min_value=0, max_value=people_per_day, key="cfg_min_seniors")
+    
     # Map display options to internal logic keys
     gender_map = {
         t["gender_opts"][0]: "Any",
@@ -517,19 +553,20 @@ def main():
     
     # Holidays Selection
     num_days_in_month = calendar.monthrange(year, month)[1]
-    all_month_dates = [date(year, month, day).strftime("%Y-%m-%d") for day in range(1, num_days_in_month + 1)]
+    all_month_dates = [date(year, month, day).strftime("%d/%m/%Y") for day in range(1, num_days_in_month + 1)]
     
     if "holidays_multiselect" not in st.session_state:
         st.session_state["holidays_multiselect"] = []
 
-    if st.sidebar.button(t["load_tr_holidays"]):
-        try:
-            tr_holidays = holidays_lib.TR(years=year)
-            month_holidays = [d.strftime("%Y-%m-%d") for d in tr_holidays if d.month == month]
-            st.session_state["holidays_multiselect"] = month_holidays
-            st.rerun()
-        except Exception as e:
-            st.sidebar.error(f"Error: {e}")
+    if lang == "Türkçe":
+        if st.sidebar.button(t["load_tr_holidays"]):
+            try:
+                tr_holidays = holidays_lib.TR(years=year)
+                month_holidays = [d.strftime("%d/%m/%Y") for d in tr_holidays if d.month == month]
+                st.session_state["holidays_multiselect"] = month_holidays
+                st.rerun()
+            except Exception as e:
+                st.sidebar.error(f"Error: {e}")
 
     # Ensure selected holidays are valid for the current month (prevents errors when changing months)
     st.session_state["holidays_multiselect"] = [d for d in st.session_state["holidays_multiselect"] if d in all_month_dates]
@@ -612,11 +649,13 @@ def main():
     
     # Form to add new person
     with st.expander(t["add_expander"], expanded=True):
-        c1, c2, c3, c4, c5, c6, c7 = st.columns([3, 1, 1, 1, 1, 1, 1])
+        c1, c2, c_role, c3, c4, c5, c6, c7 = st.columns([3, 1, 1.2, 1, 1, 1, 1, 1])
         with c1:
             name = st.text_input(t["name"])
         with c2:
             gender = st.selectbox(t["gender"], ["M", "F"])
+        with c_role:
+            role = st.selectbox(t["role"], ["Junior", "Senior"], format_func=lambda x: t["role_senior"] if x == "Senior" else t["role_junior"])
         with c3:
             fixed_total = st.number_input(t["fixed_total"], min_value=0, value=0, help=t["fixed_total_help"])
         with c4:
@@ -629,7 +668,7 @@ def main():
             mixed_ok = st.checkbox(t["mixed_ok"], value=True, help=t["mixed_ok_help"])
         
         num_days = calendar.monthrange(year, month)[1]
-        date_options = [date(year, month, day).strftime("%Y-%m-%d") for day in range(1, num_days + 1)]
+        date_options = [date(year, month, day).strftime("%d/%m/%Y") for day in range(1, num_days + 1)]
         
         c_row2_1, c_row2_2, c_row2_3, c_row2_4 = st.columns([1, 1, 1, 1])
         with c_row2_1:
@@ -641,7 +680,8 @@ def main():
                 t["leave_dates"],
                 value=[],
                 min_value=date(year, month, 1),
-                max_value=date(year, month, num_days)
+                max_value=date(year, month, num_days),
+                format="DD/MM/YYYY"
             )
         with c_row2_4:
             fixed_dates = st.multiselect(t["fixed_dates"], date_options)
@@ -655,12 +695,13 @@ def main():
                 end = leave_range[-1]
                 curr = start
                 while curr <= end:
-                    leave_dates.append(curr.strftime("%Y-%m-%d"))
+                    leave_dates.append(curr.strftime("%d/%m/%Y"))
                     curr += timedelta(days=1)
 
             st.session_state.personnel.append({
                 "name": name,
                 "gender": gender,
+                "role": role,
                 "fixed_duties_total": fixed_total,
                 "fixed_duties_weekend": fixed_wknd,
                 "max_duties": max_duties,
@@ -682,6 +723,8 @@ def main():
         # Ensure columns exist
         if "mixed_gender_allowed" not in df_personnel.columns:
             df_personnel["mixed_gender_allowed"] = True
+        if "role" not in df_personnel.columns:
+            df_personnel["role"] = "Junior"
         if "fixed_duties_total" not in df_personnel.columns:
             # Migration: Use old fixed_duties if available, else 0
             df_personnel["fixed_duties_total"] = df_personnel.get("fixed_duties", 0)
@@ -704,10 +747,11 @@ def main():
             
         # Editable Dataframe
         edited_df = st.data_editor(
-            df_personnel[["name", "gender", "fixed_duties_total", "max_duties", "fixed_duties_weekend", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "leave_dates", "fixed_dates", "duty_count", "weekend_duty_count"]],
+            df_personnel[["name", "gender", "role", "fixed_duties_total", "max_duties", "fixed_duties_weekend", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "leave_dates", "fixed_dates", "duty_count", "weekend_duty_count"]],
             column_config={
                 "name": t["name"],
                 "gender": st.column_config.SelectboxColumn(t["gender"], options=["M", "F"], required=True),
+                "role": st.column_config.SelectboxColumn(t["role"], options=["Junior", "Senior"], required=True),
                 "fixed_duties_total": st.column_config.NumberColumn(t["fixed_total"], min_value=0, step=1, help=t["fixed_total_help"]),
                 "fixed_duties_weekend": st.column_config.NumberColumn(t["fixed_wknd"], min_value=0, step=1, help=t["fixed_wknd_help"]),
                 "max_duties": st.column_config.NumberColumn(t["max_duties"], min_value=0, step=1),
@@ -758,6 +802,20 @@ def main():
             for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_language"]:
                 if key in db_data:
                     st.session_state[key] = db_data[key]
+            
+            # Restore generated schedule
+            if "generated_schedule" in db_data:
+                try:
+                    sched_loaded = {}
+                    for d_str, team in db_data["generated_schedule"].items():
+                        d_obj = date.fromisoformat(d_str)
+                        sched_loaded[d_obj] = team
+                    st.session_state.generated_schedule = sched_loaded
+                    st.session_state.gen_year = db_data.get("gen_year")
+                    st.session_state.gen_month = db_data.get("gen_month")
+                    st.session_state.schedule_success = True
+                except Exception as e:
+                    print(f"Error loading schedule: {e}")
             
             st.toast(t["loaded"], icon="✅")
 
@@ -818,6 +876,7 @@ def main():
             # Prepare Config
             config = {
                 'people_per_day': people_per_day,
+                'min_seniors': min_seniors,
                 'gender_mode': gender_map[gender_mode],
                 'allow_consecutive': allow_consecutive,
                 'conditional_rules': scheduler_rules,
@@ -869,7 +928,7 @@ def main():
         tab_list, tab_cal, tab_stats = st.tabs([t["list_view"], t["cal_view"], t["stats"]])
         
         with tab_list:
-            st.dataframe(df_res, use_container_width=True)
+            st.dataframe(df_res, use_container_width=True, hide_index=True)
             
         with tab_cal:
             cal_html = get_calendar_html(gen_year, gen_month, schedule, t)

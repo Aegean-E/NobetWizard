@@ -82,9 +82,9 @@ LANG_TEXT = {
         "type_wkday": "Weekday",
         "col_assigned": "Assigned",
         "col_assigned_help": "Total duties assigned in last generation",
-        "col_busy_help": "Comma-separated days (e.g. Monday, Tuesday)",
+        "col_busy_help": "Comma-separated days. Use the tool below to select days.",
         "col_off_help": "Specific dates (YYYY-MM-DD)",
-        "col_leave_help": "Dates on leave (YYYY-MM-DD)",
+        "col_leave_help": "Dates on leave (DD/MM/YYYY). Use the tool below for date ranges.",
         "col_fixed_help": "Specific dates (YYYY-MM-DD)",
         "gender_opts": ["Any", "Mixed (Must have M & F)", "Single Gender (All M or All F)"],
         "rule_header": "Conditional Rules",
@@ -130,7 +130,13 @@ LANG_TEXT = {
         "export_ics": "📅 Export to Calendar (.ics)",
         "btn_reset_month": "🔄 Start New Month (Reset Dates)",
         "reset_month_help": "Keeps personnel profiles but clears specific date constraints (Busy, Off, Leave, Fixed) for a fresh month.",
-        "reset_success": "Date constraints cleared for the new month!"
+        "reset_success": "Date constraints cleared for the new month!",
+        "tools_expander": "🛠️ Personnel Tools (Leave & Busy Days)",
+        "header_leave": "Add Leave Range",
+        "header_busy": "Manage Busy Days",
+        "btn_add_leave": "Add Leave Range",
+        "btn_save_busy": "Update Busy Days",
+        "busy_updated": "Busy days updated for {}!"
     },
     "Türkçe": {
         "title": "🧙‍♂️ Nöbet Sihirbazı",
@@ -189,9 +195,9 @@ LANG_TEXT = {
         "type_wkday": "Hafta İçi",
         "col_assigned": "Atanan",
         "col_assigned_help": "Son üretimde atanan toplam nöbet",
-        "col_busy_help": "Virgülle ayrılmış günler (örn. Monday, Tuesday)",
+        "col_busy_help": "Virgülle ayrılmış günler. Gün seçmek için aşağıdaki aracı kullanın.",
         "col_off_help": "Belirli tarihler (YYYY-AA-GG)",
-        "col_leave_help": "İzinli olunan tarihler (YYYY-AA-GG)",
+        "col_leave_help": "İzinli olunan tarihler (GG/AA/YYYY). Tarih aralığı için aşağıdaki aracı kullanın.",
         "col_fixed_help": "Belirli tarihler (YYYY-AA-GG)",
         "gender_opts": ["Fark etmez", "Karma (E & K olmalı)", "Tek Cinsiyet (Hepsi E veya Hepsi K)"],
         "rule_header": "Koşullu Kurallar",
@@ -237,7 +243,13 @@ LANG_TEXT = {
         "export_ics": "📅 Takvime Ekle (.ics)",
         "btn_reset_month": "🔄 Yeni Ay Başlat (Tarihleri Sıfırla)",
         "reset_month_help": "Personel profillerini korur ancak aya özel tarihleri (Mazeret, İzin, Sabit) temizler.",
-        "reset_success": "Yeni ay için tarih kısıtlamaları temizlendi!"
+        "reset_success": "Yeni ay için tarih kısıtlamaları temizlendi!",
+        "tools_expander": "🛠️ Personel Araçları (İzin & Meşgul Günler)",
+        "header_leave": "İzin Aralığı Ekle",
+        "header_busy": "Meşgul Günleri Yönet",
+        "btn_add_leave": "İzin Aralığı Ekle",
+        "btn_save_busy": "Meşgul Günleri Güncelle",
+        "busy_updated": "{} için meşgul günler güncellendi!"
     }
 }
 
@@ -303,6 +315,7 @@ def save_db(personnel, username):
         "cfg_gender": st.session_state.get("cfg_gender"),
         "cfg_consecutive": st.session_state.get("cfg_consecutive"),
         "cfg_two_rest": st.session_state.get("cfg_two_rest"),
+        "cfg_min_seniors": st.session_state.get("cfg_min_seniors"),
         "cfg_language": st.session_state.get("cfg_language")
     }
 
@@ -556,7 +569,7 @@ def main():
             st.session_state.holidays_multiselect = db_data["holidays_multiselect"]
             
         # Restore config widgets (Streamlit handles this if we set the key in session_state)
-        for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_language"]:
+        for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_min_seniors", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_language"]:
             if key in db_data:
                 st.session_state[key] = db_data[key]
         
@@ -786,10 +799,10 @@ def main():
             mime = "text/calendar"
             
         with col_dl_btn:
-            st.download_button(label="⬇️ Download", data=data, file_name=file_name, mime=mime, use_container_width=True)
+            st.download_button(label="⬇️ Download", data=data, file_name=file_name, mime=mime, use_container_width=True, key="btn_download_top")
 
     with col_gen_btn:
-        btn_gen_clicked = st.button(t["btn_gen"], type="primary", use_container_width=True)
+        btn_gen_clicked = st.button(t["btn_gen"], type="primary", use_container_width=True, key="btn_gen_schedule")
     
     # Form to add new person
     with st.expander(t["add_expander"], expanded=True):
@@ -954,6 +967,74 @@ def main():
     else:
         st.info(t["info_start"])
 
+    # --- Personnel Tools ---
+    if st.session_state.personnel:
+        with st.expander(t["tools_expander"]):
+            tab_leave, tab_busy = st.tabs([t["header_leave"], t["header_busy"]])
+            
+            person_names = [p['name'] for p in st.session_state.personnel]
+            
+            with tab_leave:
+                c_b1, c_b2, c_b3 = st.columns([2, 2, 1])
+                with c_b1:
+                    selected_person_leave = st.selectbox(t["name"], person_names, key="tool_leave_person")
+                with c_b2:
+                    leave_range_bulk = st.date_input(t["leave_dates"], value=[], key="tool_leave_dates", format="DD/MM/YYYY")
+                with c_b3:
+                    st.write("") # Spacer
+                    st.write("") # Spacer
+                    if st.button(t["btn_add_leave"], use_container_width=True, key="btn_tool_leave"):
+                        if selected_person_leave and len(leave_range_bulk) == 2:
+                            start, end = leave_range_bulk
+                            # Find person
+                            for p in st.session_state.personnel:
+                                if p['name'] == selected_person_leave:
+                                    current_leaves = [x.strip() for x in p.get('leave_dates', '').split(',') if x.strip()]
+                                    
+                                    curr = start
+                                    while curr <= end:
+                                        d_str = curr.strftime("%d/%m/%Y")
+                                        if d_str not in current_leaves:
+                                            current_leaves.append(d_str)
+                                        curr += timedelta(days=1)
+                                    
+                                    p['leave_dates'] = ", ".join(current_leaves)
+                                    st.toast(t["added"].format(selected_person_leave), icon="✅")
+                                    st.rerun()
+            
+            with tab_busy:
+                c_bu1, c_bu2, c_bu3 = st.columns([2, 2, 1])
+                with c_bu1:
+                    selected_person_busy = st.selectbox(t["name"], person_names, key="tool_busy_person")
+                
+                # Get current busy days
+                current_busy = []
+                for p in st.session_state.personnel:
+                    if p['name'] == selected_person_busy:
+                        if p.get('busy_days'):
+                            current_busy = [d.strip() for d in p['busy_days'].split(',') if d.strip()]
+                        break
+                
+                with c_bu2:
+                    new_busy_days = st.multiselect(
+                        t["busy_days"], 
+                        DAYS_OF_WEEK, 
+                        default=[d for d in current_busy if d in DAYS_OF_WEEK],
+                        format_func=translate_day,
+                        key="tool_busy_select",
+                        placeholder=t["placeholder_select"]
+                    )
+                
+                with c_bu3:
+                    st.write("")
+                    st.write("")
+                    if st.button(t["btn_save_busy"], use_container_width=True, key="btn_tool_busy"):
+                        for p in st.session_state.personnel:
+                            if p['name'] == selected_person_busy:
+                                p['busy_days'] = ", ".join(new_busy_days)
+                                st.toast(t["busy_updated"].format(selected_person_busy), icon="✅")
+                                st.rerun()
+
     # --- Save / Load Section ---
     st.divider()
     
@@ -978,7 +1059,7 @@ def main():
             if "holidays_multiselect" in db_data:
                 st.session_state.holidays_multiselect = db_data["holidays_multiselect"]
             
-            for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_language"]:
+            for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_min_seniors", "cfg_gender", "cfg_consecutive", "cfg_two_rest", "cfg_language"]:
                 if key in db_data:
                     st.session_state[key] = db_data[key]
             
@@ -1088,6 +1169,7 @@ def main():
                 st.session_state.gen_year = year
                 st.session_state.gen_month = month
                 st.session_state.schedule_success = True
+                st.toast(t["success"], icon="🎉")
                 st.rerun()
             else:
                 st.session_state.schedule_success = False

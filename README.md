@@ -12,7 +12,7 @@
 ## 🌟 Features
 
 ### 👥 Personnel Management
-*   **Detailed Profiles:** Manage staff with attributes like Name, Gender, and Max Duty limits.
+*   **Detailed Profiles:** Manage staff with attributes like Name, Gender, **Role (Senior/Junior)**, and Max Duty limits.
 *   **Availability Constraints:**
     *   **Busy Days:** Block specific days of the week (e.g., "No Mondays").
     *   **Off Dates:** Block specific calendar dates (e.g., holidays or specific appointments).
@@ -26,12 +26,19 @@
 *   **Preferences:**
     *   **Mixed Gender:** Option to opt-out of mixed-gender teams (e.g., a person who prefers not to be on a mixed team).
 *   **Editable Grid:** Inline editing of all personnel data for quick adjustments.
+*   **Smart Tools:**
+    *   **Leave Range Adder:** Quickly add annual leave for a date range (e.g., 01/02/2024 - 10/02/2024) instead of selecting days one by one.
+    *   **Busy Days Manager:** Multi-select interface to easily manage weekly unavailable days (e.g., "Every Monday").
+    *   **Start New Month (Reset):** One-click reset for date-specific constraints (Busy, Off, Leave, Fixed) to prepare for the next month. This preserves personnel profiles, roles, and targets, saving time on data entry.
 *   **Persistence:**
     *   **User-Specific Database:** Personnel lists are saved to your user profile (Local JSON or Cloud Firestore).
     *   **Import/Export:** Save and load personnel lists via CSV or JSON.
 
 ### ⚙️ Scheduling Rules & Constraints
 *   **Team Composition:** Configure number of people per day.
+*   **Seniority Rules:**
+    *   **Roles:** Assign personnel as **Senior** or **Junior**.
+    *   **Min. Seniors:** Enforce a minimum number of Seniors per shift to ensure experience balance in the team.
 *   **Gender Rules:**
     *   *Any*: No restrictions on team composition.
     *   *Mixed*: Requires at least one Male and one Female per shift (if team size > 1).
@@ -43,6 +50,9 @@
 *   **Advanced Logic:**
     *   **Conditional Rules:** Create custom logic like "If someone holds duty on Wednesday, they cannot hold duty on Saturday".
     *   **Incompatible Pairs:** Define pairs of people who should **never** work together (Conflict resolution).
+*   **Optimization Algorithm:**
+    *   **Fairness-First (Best-of-N):** The system generates multiple valid schedules (Monte Carlo simulation) in the background and automatically selects the one with the lowest standard deviation (most equal distribution).
+    *   **Water-Filling Logic:** The scheduler prioritizes personnel with the fewest current duties when assigning shifts to prevent "clumping" of shifts.
 *   **Holidays:**
     *   **Manual Selection:** Mark specific dates to be treated as weekends (affecting weekend counts and coloring).
     *   **Auto-Load:** One-click integration to fetch Turkish National Holidays for the selected year.
@@ -56,8 +66,9 @@
     *   **Fairness Score:** Calculates the Standard Deviation of duty counts to mathematically quantify how equal the distribution is (Lower is better).
     *   **Visual Charts:** Bar charts to visualize duty distribution.
 *   **Export:**
-    *   **Excel (.xlsx):** Download formatted spreadsheets.
-    *   **PDF:** Download professional-looking PDF reports.
+    *   **Excel (.xlsx):** Download formatted spreadsheets with auto-adjusted column widths.
+    *   **PDF:** Download professional-looking PDF reports with Turkish font support (Roboto).
+    *   **iCalendar (.ics):** Export the schedule to standard calendar format for integration with Google Calendar, Outlook, or Apple Calendar.
 
 ### 🌍 Localization
 *   Full support for **English** and **Turkish** (Türkçe) languages.

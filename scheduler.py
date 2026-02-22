@@ -49,16 +49,31 @@ class DutyScheduler:
         # If they worked yesterday, they cannot work today (unless configured otherwise)
         if not self.config.get('allow_consecutive', False):
             yesterday = current_date - timedelta(days=1)
+            
+            # Check current month history
             if yesterday in self.schedule:
-                # Check if person was in yesterday's list
                 if any(p['name'] == person['name'] for p in self.schedule[yesterday]):
+                    return False
+            # Check previous month history (if we are on day 1)
+            elif current_date.day == 1:
+                if person['name'] in self.config.get('history', {}).get('prev_1', []):
                     return False
             
             # New Rule: 2 Days Rest (Prevent "Every Other Day" pattern)
             if self.config.get('require_two_rest_days', False):
                 day_before = current_date - timedelta(days=2)
+                
+                # Check current month
                 if day_before in self.schedule:
                     if any(p['name'] == person['name'] for p in self.schedule[day_before]):
+                        return False
+                # Check previous month history
+                elif current_date.day == 1:
+                    if person['name'] in self.config.get('history', {}).get('prev_2', []):
+                        return False
+                elif current_date.day == 2:
+                    # On day 2, day_before is day 0 (prev_1)
+                    if person['name'] in self.config.get('history', {}).get('prev_1', []):
                         return False
 
         # 4. Already in current team (cannot be added twice same day)

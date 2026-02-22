@@ -1,0 +1,9 @@
+# Ignore local database files
+*.json
+
+# Ignore Streamlit secrets
+.streamlit/secrets.toml
+
+# Ignore Python cache
+__pycache__/
+*.pyc

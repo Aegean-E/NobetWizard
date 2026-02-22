@@ -5,3 +5,4 @@ reportlab
 holidays
 matplotlib
 google-cloud-firestore
+bcrypt

@@ -5,7 +5,7 @@ import calendar
 from scheduler import DutyScheduler
 import json
 import os
-import hashlib
+import bcrypt
 from io import BytesIO
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -16,6 +16,8 @@ from reportlab.pdfbase.ttfonts import TTFont
 import urllib.request
 import holidays as holidays_lib
 import statistics
+import re
+import time
 
 # --- Cloud Database Imports ---
 try:
@@ -145,6 +147,9 @@ LANG_TEXT = {
         "busy_updated": "Busy days updated for {}!",
         "off_updated": "Off dates updated for {}!",
         "fixed_updated": "Fixed duties updated for {}!"
+        "history_header": "Previous Month History",
+        "history_help": "Select who worked on the last days of the previous month to ensure rest rules (Consecutive/2-Day) are respected.",
+        "worked_on": "Worked on {}"
     },
     "Türkçe": {
         "title": "🧙‍♂️ Nöbet Sihirbazı",
@@ -266,6 +271,9 @@ LANG_TEXT = {
         "busy_updated": "{} için meşgul günler güncellendi!",
         "off_updated": "{} için izinli tarihler güncellendi!",
         "fixed_updated": "{} için sabit nöbetler güncellendi!"
+        "history_header": "Önceki Ay Geçmişi",
+        "history_help": "Ardışık nöbet veya dinlenme kurallarının bozulmaması için önceki ayın son günlerinde kimlerin çalıştığını seçin.",
+        "worked_on": "{} tarihinde çalışanlar"
     }
 }
 
@@ -367,12 +375,15 @@ def save_users(data):
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 def make_hashes(password):
-    return hashlib.sha256(str.encode(password)).hexdigest()
+    # Generate a salt and hash the password
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 def check_hashes(password, hashed_text):
-    if make_hashes(password) == hashed_text:
-        return True
-    return False
+    try:
+        # Check the password against the stored hash
+        return bcrypt.checkpw(password.encode(), hashed_text.encode())
+    except ValueError:
+        return False
 
 def authenticate(username, password):
     # 1. Check Cloud DB
@@ -410,7 +421,11 @@ def login_page():
     with tab1:
         username = st.text_input(t["username"], key="login_user")
         password = st.text_input(t["password"], type='password', key="login_pass")
+        
         if st.button(t["login_btn"]):
+            # Anti-Brute Force: Simple Rate Limiting
+            time.sleep(1) # Artificial delay to slow down guessing scripts
+            
             if authenticate(username, password):
                 st.session_state['logged_in'] = True
                 st.session_state['username'] = username
@@ -425,6 +440,15 @@ def login_page():
         new_user = st.text_input(t["username"], key="reg_user")
         new_pass = st.text_input(t["password"], type='password', key="reg_pass")
         if st.button(t["register_btn"]):
+            # 1. Input Validation
+            if not re.match("^[a-zA-Z0-9_-]{3,20}$", new_user):
+                st.error("Username must be 3-20 characters and contain only letters, numbers, - or _")
+                return
+            
+            if len(new_pass) < 8:
+                st.error("Password must be at least 8 characters long.")
+                return
+
             # 1. Cloud Registration
             db = get_firestore_db()
             if db:
@@ -679,6 +703,26 @@ def main():
     if "cfg_max_weekly" not in st.session_state:
         st.session_state.cfg_max_weekly = 3
     max_weekly = st.sidebar.number_input(t["weekly_limit"], min_value=1, max_value=7, help=t["weekly_limit_help"], key="cfg_max_weekly")
+    
+    # --- Previous Month Context ---
+    st.sidebar.markdown("---")
+    st.sidebar.subheader(t["history_header"])
+    st.sidebar.caption(t["history_help"])
+    
+    # Calculate previous dates
+    first_day_current = date(year, month, 1)
+    prev_1 = first_day_current - timedelta(days=1) # Last day of prev month
+    prev_2 = first_day_current - timedelta(days=2) # Day before last
+    
+    personnel_names = [p['name'] for p in st.session_state.get('personnel', [])]
+    
+    # Input for Last Day (Always needed for consecutive check)
+    history_prev_1 = st.sidebar.multiselect(t["worked_on"].format(prev_1.strftime("%d/%m")), personnel_names, key="hist_p1", placeholder=t["placeholder_select"])
+    
+    # Input for Day Before Last (Only needed if 2-day rest is active)
+    history_prev_2 = []
+    if require_two_rest:
+        history_prev_2 = st.sidebar.multiselect(t["worked_on"].format(prev_2.strftime("%d/%m")), personnel_names, key="hist_p2", placeholder=t["placeholder_select"])
     
     # Holidays Selection
     num_days_in_month = calendar.monthrange(year, month)[1]
@@ -1255,7 +1299,11 @@ def main():
                 'max_weekly_duties': max_weekly,
                 'require_two_rest_days': require_two_rest,
                 'holidays': selected_holidays,
-                'forbidden_pairs': st.session_state.forbidden_pairs
+                'forbidden_pairs': st.session_state.forbidden_pairs,
+                'history': {
+                    'prev_1': history_prev_1, # Names of people who worked yesterday (relative to 1st of month)
+                    'prev_2': history_prev_2  # Names of people who worked 2 days ago
+                }
             }
 
             # Initialize Scheduler

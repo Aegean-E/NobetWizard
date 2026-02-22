@@ -704,206 +704,213 @@ def main():
     if st.button(t["btn_gen"], type="primary"):
         if not st.session_state.personnel:
             st.error(t["err_no_pers"])
-            return
-
-        # Convert rules to indices for scheduler
-        # calendar.day_name is ['Monday', 'Tuesday'...] -> Index 0-6
-        scheduler_rules = []
-        for r in st.session_state.conditional_rules:
-            scheduler_rules.append({
-                'trigger': DAYS_OF_WEEK.index(r['trigger']),
-                'forbidden': DAYS_OF_WEEK.index(r['forbidden'])
-            })
-
-        # Prepare Config
-        config = {
-            'people_per_day': people_per_day,
-            'gender_mode': gender_map[gender_mode],
-            'allow_consecutive': allow_consecutive,
-            'conditional_rules': scheduler_rules,
-            'require_two_rest_days': require_two_rest,
-            'holidays': selected_holidays,
-            'forbidden_pairs': st.session_state.forbidden_pairs
-        }
-
-        # Initialize Scheduler
-        scheduler = DutyScheduler(year, month, st.session_state.personnel, config)
-        
-        with st.spinner(t["spinner"]):
-            success, schedule = scheduler.generate()
-
-        if success:
-            st.success(t["success"])
-            
-            # Process data for display
-            display_data = []
-            calendar_data = []
-            
-            for d, team in sorted(schedule.items()):
-                names = ", ".join([p['name'] for p in team])
-                day_name = translate_day(DAYS_OF_WEEK[d.weekday()])
-                is_weekend = d.weekday() >= 5
-                
-                display_data.append({
-                    t["col_date"]: d.strftime("%Y-%m-%d"),
-                    t["col_day"]: day_name,
-                    t["col_team"]: names,
-                    t["col_type"]: t["type_wknd"] if is_weekend else t["type_wkday"]
+        else:
+            # Convert rules to indices for scheduler
+            # calendar.day_name is ['Monday', 'Tuesday'...] -> Index 0-6
+            scheduler_rules = []
+            for r in st.session_state.conditional_rules:
+                scheduler_rules.append({
+                    'trigger': DAYS_OF_WEEK.index(r['trigger']),
+                    'forbidden': DAYS_OF_WEEK.index(r['forbidden'])
                 })
 
-            df_res = pd.DataFrame(display_data)
-            
-            # --- TABS ---
-            tab_list, tab_cal, tab_stats = st.tabs([t["list_view"], t["cal_view"], t["stats"]])
-            
-            with tab_list:
-                st.dataframe(df_res, use_container_width=True)
-                
-            with tab_cal:
-                cal_html = get_calendar_html(year, month, schedule, t)
-                st.markdown(cal_html, unsafe_allow_html=True)
-            
-            # Show Stats
-            with tab_stats:
-                stats = []
-                duty_counts = []
-                for p in st.session_state.personnel:
-                    stats.append({
-                        t["name"]: p['name'],
-                        t["col_assigned"]: p['duty_count'],
-                        t["type_wknd"]: p['weekend_duty_count']
-                    })
-                    duty_counts.append(p['duty_count'])
-                
-                # Fairness Metric
-                if len(duty_counts) > 1:
-                    stdev = statistics.stdev(duty_counts)
-                    st.metric(label=t["fairness_score"], value=f"{stdev:.2f}", help=t["fairness_help"])
-                
-                st.dataframe(pd.DataFrame(stats), use_container_width=True)
-                
-                # Chart
-                st.caption("Duty Distribution / Nöbet Dağılımı")
-                st.bar_chart(pd.DataFrame(stats).set_index(t["name"])[[t["col_assigned"], t["type_wknd"]]])
-                
-                st.divider()
-                
-                # 1. Day Distribution Heatmap
-                st.subheader(t["day_distribution"])
-                day_counts = {p['name']: {day: 0 for day in t["short_days"]} for p in st.session_state.personnel}
-                for d, team in schedule.items():
-                    day_idx = d.weekday()
-                    day_name = t["short_days"][day_idx]
-                    for p in team:
-                        day_counts[p['name']][day_name] += 1
-                
-                df_days = pd.DataFrame(day_counts).T
-                st.dataframe(df_days.style.background_gradient(cmap="Blues", axis=1), use_container_width=True)
+            # Prepare Config
+            config = {
+                'people_per_day': people_per_day,
+                'gender_mode': gender_map[gender_mode],
+                'allow_consecutive': allow_consecutive,
+                'conditional_rules': scheduler_rules,
+                'require_two_rest_days': require_two_rest,
+                'holidays': selected_holidays,
+                'forbidden_pairs': st.session_state.forbidden_pairs
+            }
 
-                # 2. Co-occurrence Matrix
-                st.subheader(t["co_occurrence"])
-                names = [p['name'] for p in st.session_state.personnel]
-                if len(names) > 0:
-                    co_matrix = pd.DataFrame(0, index=names, columns=names)
-                    for team in schedule.values():
-                        t_names = [p['name'] for p in team]
-                        for i in range(len(t_names)):
-                            for j in range(i + 1, len(t_names)):
-                                p1, p2 = t_names[i], t_names[j]
-                                co_matrix.loc[p1, p2] += 1
-                                co_matrix.loc[p2, p1] += 1
-                    
-                    # Display with gradient
-                    st.dataframe(co_matrix.style.background_gradient(cmap="Reds"), use_container_width=True)
+            # Initialize Scheduler
+            scheduler = DutyScheduler(year, month, st.session_state.personnel, config)
             
-            # --- Export Section ---
+            with st.spinner(t["spinner"]):
+                success, schedule = scheduler.generate()
+
+            if success:
+                st.session_state.generated_schedule = schedule
+                st.session_state.gen_year = year
+                st.session_state.gen_month = month
+                st.session_state.schedule_success = True
+            else:
+                st.session_state.schedule_success = False
+                st.error(t["err_fail"])
+
+    if st.session_state.get("schedule_success") and st.session_state.get("generated_schedule"):
+        st.success(t["success"])
+        schedule = st.session_state.generated_schedule
+        gen_year = st.session_state.gen_year
+        gen_month = st.session_state.gen_month
+        
+        # Process data for display
+        display_data = []
+        
+        for d, team in sorted(schedule.items()):
+            names = ", ".join([p['name'] for p in team])
+            day_name = translate_day(DAYS_OF_WEEK[d.weekday()])
+            is_weekend = d.weekday() >= 5
+            
+            display_data.append({
+                t["col_date"]: d.strftime("%Y-%m-%d"),
+                t["col_day"]: day_name,
+                t["col_team"]: names,
+                t["col_type"]: t["type_wknd"] if is_weekend else t["type_wkday"]
+            })
+
+        df_res = pd.DataFrame(display_data)
+        
+        # --- TABS ---
+        tab_list, tab_cal, tab_stats = st.tabs([t["list_view"], t["cal_view"], t["stats"]])
+        
+        with tab_list:
+            st.dataframe(df_res, use_container_width=True)
+            
+        with tab_cal:
+            cal_html = get_calendar_html(gen_year, gen_month, schedule, t)
+            st.markdown(cal_html, unsafe_allow_html=True)
+        
+        # Show Stats
+        with tab_stats:
+            stats = []
+            duty_counts = []
+            for p in st.session_state.personnel:
+                stats.append({
+                    t["name"]: p['name'],
+                    t["col_assigned"]: p['duty_count'],
+                    t["type_wknd"]: p['weekend_duty_count']
+                })
+                duty_counts.append(p['duty_count'])
+            
+            # Fairness Metric
+            if len(duty_counts) > 1:
+                stdev = statistics.stdev(duty_counts)
+                st.metric(label=t["fairness_score"], value=f"{stdev:.2f}", help=t["fairness_help"])
+            
+            st.dataframe(pd.DataFrame(stats), use_container_width=True)
+            
+            # Chart
+            st.caption("Duty Distribution / Nöbet Dağılımı")
+            st.bar_chart(pd.DataFrame(stats).set_index(t["name"])[[t["col_assigned"], t["type_wknd"]]])
+            
             st.divider()
-            c_ex1, c_ex2 = st.columns(2)
             
-            # 1. Excel Export
-            buffer_excel = BytesIO()
-            try:
-                with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                    df_res.to_excel(writer, index=False, sheet_name='Schedule')
-                    # Adjust column widths
-                    worksheet = writer.sheets['Schedule']
-                    for column_cells in worksheet.columns:
-                        length = max(len(str(cell.value)) for cell in column_cells)
-                        worksheet.column_dimensions[column_cells[0].column_letter].width = length + 2
-                
-                with c_ex1:
-                    st.download_button(
-                        label=t["export_excel"],
-                        data=buffer_excel.getvalue(),
-                        file_name=f"nobet_list_{year}_{month}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-            except ImportError:
-                st.error("Missing 'openpyxl' library. Please run: pip install openpyxl")
-            except Exception as e:
-                st.error(f"Excel Export Error: {e}")
+            # 1. Day Distribution Heatmap
+            st.subheader(t["day_distribution"])
+            day_counts = {p['name']: {day: 0 for day in t["short_days"]} for p in st.session_state.personnel}
+            for d, team in schedule.items():
+                day_idx = d.weekday()
+                day_name = t["short_days"][day_idx]
+                for p in team:
+                    day_counts[p['name']][day_name] += 1
+            
+            df_days = pd.DataFrame(day_counts).T
+            st.dataframe(df_days.style.background_gradient(cmap="Blues", axis=1), use_container_width=True)
 
-            # 2. PDF Export
-            buffer_pdf = BytesIO()
-            doc = SimpleDocTemplate(buffer_pdf, pagesize=A4)
-            elements = []
-            styles = getSampleStyleSheet()
+            # 2. Co-occurrence Matrix
+            st.subheader(t["co_occurrence"])
+            names = [p['name'] for p in st.session_state.personnel]
+            if len(names) > 0:
+                co_matrix = pd.DataFrame(0, index=names, columns=names)
+                for team in schedule.values():
+                    t_names = [p['name'] for p in team]
+                    for i in range(len(t_names)):
+                        for j in range(i + 1, len(t_names)):
+                            p1, p2 = t_names[i], t_names[j]
+                            co_matrix.loc[p1, p2] += 1
+                            co_matrix.loc[p2, p1] += 1
+                
+                # Display with gradient
+                st.dataframe(co_matrix.style.background_gradient(cmap="Reds"), use_container_width=True)
+        
+        # --- Export Section ---
+        st.divider()
+        c_ex1, c_ex2 = st.columns(2)
+        
+        # 1. Excel Export
+        buffer_excel = BytesIO()
+        try:
+            with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+                df_res.to_excel(writer, index=False, sheet_name='Schedule')
+                # Adjust column widths
+                worksheet = writer.sheets['Schedule']
+                for column_cells in worksheet.columns:
+                    length = max(len(str(cell.value)) for cell in column_cells)
+                    worksheet.column_dimensions[column_cells[0].column_letter].width = length + 2
             
-            # --- Font Registration for Turkish Support ---
-            font_name = 'Helvetica' # Default fallback
-            font_name_bold = 'Helvetica-Bold'
-            try:
-                font_path_reg = "Roboto-Regular.ttf"
-                font_path_bold = "Roboto-Bold.ttf"
-                
-                if not os.path.exists(font_path_reg):
-                    urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf", font_path_reg)
-                
-                if not os.path.exists(font_path_bold):
-                    urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf", font_path_bold)
-                
-                pdfmetrics.registerFont(TTFont('Roboto', font_path_reg))
-                pdfmetrics.registerFont(TTFont('Roboto-Bold', font_path_bold))
-                font_name = 'Roboto'
-                font_name_bold = 'Roboto-Bold'
-            except Exception as e:
-                st.warning(f"Could not load custom fonts, Turkish characters might not display correctly. Error: {e}")
+            with c_ex1:
+                st.download_button(
+                    label=t["export_excel"],
+                    data=buffer_excel.getvalue(),
+                    file_name=f"nobet_list_{gen_year}_{gen_month}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+        except ImportError:
+            st.error("Missing 'openpyxl' library. Please run: pip install openpyxl")
+        except Exception as e:
+            st.error(f"Excel Export Error: {e}")
 
-            # Title
-            title_style = styles['Title']
-            title_style.fontName = font_name_bold
-            elements.append(Paragraph(f"{t['title']} - {gen_year}/{gen_month}", title_style))
+        # 2. PDF Export
+        buffer_pdf = BytesIO()
+        doc = SimpleDocTemplate(buffer_pdf, pagesize=A4)
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # --- Font Registration for Turkish Support ---
+        font_name = 'Helvetica' # Default fallback
+        font_name_bold = 'Helvetica-Bold'
+        try:
+            font_path_reg = "Roboto-Regular.ttf"
+            font_path_bold = "Roboto-Bold.ttf"
             
-            # Table
-            data = [df_res.columns.to_list()] + df_res.values.tolist()
-            table = Table(data)
-            table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), font_name_bold),
-                ('FONTNAME', (0, 1), (-1, -1), font_name),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ]))
-            elements.append(table)
+            if not os.path.exists(font_path_reg):
+                urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf", font_path_reg)
             
-            try:
-                doc.build(elements)
-                pdf_data = buffer_pdf.getvalue()
-                with c_ex2:
-                    st.download_button(
-                        label=t["export_pdf"],
-                        data=pdf_data,
-                        file_name=f"nobet_list_{year}_{month}.pdf",
-                        mime="application/pdf"
-                    )
-            except Exception as e:
-                st.error(f"PDF Generation Error: {e}")
+            if not os.path.exists(font_path_bold):
+                urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf", font_path_bold)
             
-        else:
-            st.error(t["err_fail"])
+            pdfmetrics.registerFont(TTFont('Roboto', font_path_reg))
+            pdfmetrics.registerFont(TTFont('Roboto-Bold', font_path_bold))
+            font_name = 'Roboto'
+            font_name_bold = 'Roboto-Bold'
+        except Exception as e:
+            st.warning(f"Could not load custom fonts, Turkish characters might not display correctly. Error: {e}")
+
+        # Title
+        title_style = styles['Title']
+        title_style.fontName = font_name_bold
+        elements.append(Paragraph(f"{t['title']} - {gen_year}/{gen_month}", title_style))
+        
+        # Table
+        data = [df_res.columns.to_list()] + df_res.values.tolist()
+        table = Table(data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), font_name_bold),
+            ('FONTNAME', (0, 1), (-1, -1), font_name),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ]))
+        elements.append(table)
+        
+        try:
+            doc.build(elements)
+            pdf_data = buffer_pdf.getvalue()
+            with c_ex2:
+                st.download_button(
+                    label=t["export_pdf"],
+                    data=pdf_data,
+                    file_name=f"nobet_list_{gen_year}_{gen_month}.pdf",
+                    mime="application/pdf"
+                )
+        except Exception as e:
+            st.error(f"PDF Generation Error: {e}")
 
 if __name__ == '__main__':
     if st.runtime.exists():

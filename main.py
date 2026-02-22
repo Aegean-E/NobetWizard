@@ -104,7 +104,10 @@ LANG_TEXT = {
         "conflict_header": "Incompatible Pairs",
         "conflict_help": "Select two people who should NOT work together.",
         "btn_add_conflict": "Block Pair",
-        "conflict_desc": "🚫 {} & {}"
+        "conflict_desc": "🚫 {} & {}",
+        "template_download": "📥 Download Excel Template",
+        "co_occurrence": "🤝 Team Co-occurrence (Who works with whom?)",
+        "day_distribution": "📅 Day of Week Distribution"
     },
     "Türkçe": {
         "title": "🧙‍♂️ Nöbet Sihirbazı",
@@ -194,7 +197,10 @@ LANG_TEXT = {
         "conflict_header": "Uyumsuz Çiftler",
         "conflict_help": "Birlikte çalışmaması gereken iki kişiyi seçin.",
         "btn_add_conflict": "Çifti Engelle",
-        "conflict_desc": "🚫 {} & {}"
+        "conflict_desc": "🚫 {} & {}",
+        "template_download": "📥 Excel Şablonu İndir",
+        "co_occurrence": "🤝 Birlikte Çalışma Sıklığı",
+        "day_distribution": "📅 Gün Bazlı Dağılım"
     }
 }
 
@@ -646,11 +652,35 @@ def main():
                 mime="application/json"
             )
 
+        # Template Download
+        with c_dl:
+            # Create empty template dataframe
+            template_cols = ["name", "gender", "fixed_duties_total", "max_duties", "fixed_duties_weekend", "max_weekends", "mixed_gender_allowed", "busy_days", "off_dates", "leave_dates", "fixed_dates"]
+            df_template = pd.DataFrame(columns=template_cols)
+            buffer_template = BytesIO()
+            with pd.ExcelWriter(buffer_template, engine='openpyxl') as writer:
+                df_template.to_excel(writer, index=False)
+            
+            st.download_button(
+                label=t["template_download"],
+                data=buffer_template.getvalue(),
+                file_name="personnel_template.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
         with c_ul:
-            uploaded_file = st.file_uploader(t["load_csv"], type="csv", label_visibility="collapsed")
+            uploaded_file = st.file_uploader(t["load_csv"], type=["csv", "xlsx"], label_visibility="collapsed")
             if uploaded_file:
                 try:
-                    loaded_df = pd.read_csv(uploaded_file)
+                    if uploaded_file.name.endswith('.csv'):
+                        loaded_df = pd.read_csv(uploaded_file)
+                    else:
+                        loaded_df = pd.read_excel(uploaded_file)
+                    
+                    # Sanitize boolean columns if coming from Excel
+                    if "mixed_gender_allowed" in loaded_df.columns:
+                        loaded_df["mixed_gender_allowed"] = loaded_df["mixed_gender_allowed"].astype(bool)
+                        
                     st.session_state.personnel = loaded_df.to_dict('records')
                     st.success(t["loaded"])
                     st.rerun()
@@ -752,6 +782,36 @@ def main():
                 # Chart
                 st.caption("Duty Distribution / Nöbet Dağılımı")
                 st.bar_chart(pd.DataFrame(stats).set_index(t["name"])[[t["col_assigned"], t["type_wknd"]]])
+                
+                st.divider()
+                
+                # 1. Day Distribution Heatmap
+                st.subheader(t["day_distribution"])
+                day_counts = {p['name']: {day: 0 for day in t["short_days"]} for p in st.session_state.personnel}
+                for d, team in schedule.items():
+                    day_idx = d.weekday()
+                    day_name = t["short_days"][day_idx]
+                    for p in team:
+                        day_counts[p['name']][day_name] += 1
+                
+                df_days = pd.DataFrame(day_counts).T
+                st.dataframe(df_days.style.background_gradient(cmap="Blues", axis=1), use_container_width=True)
+
+                # 2. Co-occurrence Matrix
+                st.subheader(t["co_occurrence"])
+                names = [p['name'] for p in st.session_state.personnel]
+                if len(names) > 0:
+                    co_matrix = pd.DataFrame(0, index=names, columns=names)
+                    for team in schedule.values():
+                        t_names = [p['name'] for p in team]
+                        for i in range(len(t_names)):
+                            for j in range(i + 1, len(t_names)):
+                                p1, p2 = t_names[i], t_names[j]
+                                co_matrix.loc[p1, p2] += 1
+                                co_matrix.loc[p2, p1] += 1
+                    
+                    # Display with gradient
+                    st.dataframe(co_matrix.style.background_gradient(cmap="Reds"), use_container_width=True)
             
             # --- Export Section ---
             st.divider()

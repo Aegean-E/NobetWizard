@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import date, timedelta
 import calendar
 from scheduler import DutyScheduler
 import json
@@ -11,7 +11,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
-import holidays
+import holidays as holidays_lib
 import statistics
 
 # --- Translation Dictionary ---
@@ -100,7 +100,11 @@ LANG_TEXT = {
         "list_view": "📋 List View",
         "fairness_score": "Fairness Score (Std Dev)",
         "fairness_help": "Lower is better. 0 means perfect equality.",
-        "short_days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        "short_days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "conflict_header": "Incompatible Pairs",
+        "conflict_help": "Select two people who should NOT work together.",
+        "btn_add_conflict": "Block Pair",
+        "conflict_desc": "🚫 {} & {}"
     },
     "Türkçe": {
         "title": "🧙‍♂️ Nöbet Sihirbazı",
@@ -186,7 +190,11 @@ LANG_TEXT = {
         "list_view": "📋 Liste Görünümü",
         "fairness_score": "Adalet Puanı (Std Sapma)",
         "fairness_help": "Düşük olması iyidir. 0 olması mükemmel eşitlik demektir.",
-        "short_days": ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
+        "short_days": ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"],
+        "conflict_header": "Uyumsuz Çiftler",
+        "conflict_help": "Birlikte çalışmaması gereken iki kişiyi seçin.",
+        "btn_add_conflict": "Çifti Engelle",
+        "conflict_desc": "🚫 {} & {}"
     }
 }
 
@@ -202,13 +210,33 @@ def load_db(username):
     path = get_user_db_path(username)
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
+            data = json.load(f)
+            # Backward compatibility: if list, it's just personnel
+            if isinstance(data, list):
+                return {"personnel": data}
+            return data
+    return {"personnel": []}
 
-def save_db(data, username):
+def save_db(personnel, username):
     path = get_user_db_path(username)
+    
+    # Save full project state
+    state_data = {
+        "personnel": personnel,
+        "conditional_rules": st.session_state.get("conditional_rules", []),
+        "forbidden_pairs": st.session_state.get("forbidden_pairs", []),
+        "holidays_multiselect": st.session_state.get("holidays_multiselect", []),
+        # Save config settings if they exist in state
+        "cfg_year": st.session_state.get("cfg_year"),
+        "cfg_month": st.session_state.get("cfg_month"),
+        "cfg_ppl": st.session_state.get("cfg_ppl"),
+        "cfg_gender": st.session_state.get("cfg_gender"),
+        "cfg_consecutive": st.session_state.get("cfg_consecutive"),
+        "cfg_two_rest": st.session_state.get("cfg_two_rest")
+    }
+    
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+        json.dump(state_data, f, ensure_ascii=False, indent=4)
 
 def load_users():
     if os.path.exists(USER_DB_FILE):
@@ -283,7 +311,8 @@ def get_calendar_html(year, month, schedule, t):
     cal = calendar.monthcalendar(year, month)
     
     # Header
-    headers = "".join([f"<th style='border:1px solid #ddd; padding:8px; background:#f0f2f6; width:14%;'>{day}</th>" for day in t["short_days"]])
+    # Use CSS variables for Dark Mode compatibility
+    headers = "".join([f"<th style='border:1px solid var(--text-color); padding:8px; background:var(--secondary-background-color); width:14%; color:var(--text-color);'>{day}</th>" for day in t["short_days"]])
     
     html = f"<table style='width:100%; border-collapse:collapse; table-layout: fixed;'><thead><tr>{headers}</tr></thead><tbody>"
     
@@ -291,21 +320,21 @@ def get_calendar_html(year, month, schedule, t):
         html += "<tr>"
         for day in week:
             if day == 0:
-                html += "<td style='border:1px solid #ddd; background:#f9f9f9;'></td>"
+                html += "<td style='border:1px solid var(--text-color); background:var(--background-color); opacity:0.5;'></td>"
             else:
                 current_date = date(year, month, day)
                 is_weekend = current_date.weekday() >= 5
-                bg_color = "#fff" if not is_weekend else "#fafafa"
+                bg_color = "var(--background-color)" if not is_weekend else "var(--secondary-background-color)"
                 
-                day_content = f"<div style='font-weight:bold; margin-bottom:5px; color:#444;'>{day}</div>"
+                day_content = f"<div style='font-weight:bold; margin-bottom:5px; color:var(--text-color);'>{day}</div>"
                 
                 if current_date in schedule:
                     team = schedule[current_date]
                     for p in team:
                         # Random pastel colors or fixed blue
-                        day_content += f"<div style='background:#e6f3ff; padding:2px 4px; margin-bottom:2px; border-radius:4px; font-size:11px; border:1px solid #cce5ff; color:#004085;'>{p['name']}</div>"
+                        day_content += f"<div style='background:#e6f3ff; padding:2px 4px; margin-bottom:2px; border-radius:4px; font-size:11px; border:1px solid #cce5ff; color:#004085; font-weight:bold;'>{p['name']}</div>"
                 
-                html += f"<td style='border:1px solid #ddd; padding:5px; height:100px; vertical-align:top; background:{bg_color};'>{day_content}</td>"
+                html += f"<td style='border:1px solid var(--text-color); padding:5px; height:100px; vertical-align:top; background:{bg_color};'>{day_content}</td>"
         html += "</tr>"
     
     html += "</tbody></table>"
@@ -341,11 +370,11 @@ def main():
     st.sidebar.header(t["sidebar_gen"])
     
     today = date.today()
-    year = st.sidebar.number_input(t["year"], min_value=today.year, max_value=today.year+5, value=today.year)
-    month = st.sidebar.selectbox(t["month"], range(1, 13), index=today.month-1)
+    year = st.sidebar.number_input(t["year"], min_value=today.year, max_value=today.year+5, value=today.year, key="cfg_year")
+    month = st.sidebar.selectbox(t["month"], range(1, 13), index=today.month-1, key="cfg_month")
     
     st.sidebar.header(t["sidebar_rules"])
-    people_per_day = st.sidebar.number_input(t["ppl_day"], min_value=1, value=2)
+    people_per_day = st.sidebar.number_input(t["ppl_day"], min_value=1, value=2, key="cfg_ppl")
     
     # Map display options to internal logic keys
     gender_map = {
@@ -357,10 +386,11 @@ def main():
     gender_mode = st.sidebar.selectbox(
         t["gender_rules"], 
         t["gender_opts"],
-        help=t["gender_help"]
+        help=t["gender_help"],
+        key="cfg_gender"
     )
-    allow_consecutive = st.sidebar.checkbox(t["consecutive"], value=False, help=t["consecutive_help"])
-    require_two_rest = st.sidebar.checkbox(t["two_day_rule"], value=False, help=t["two_day_help"])
+    allow_consecutive = st.sidebar.checkbox(t["consecutive"], value=False, help=t["consecutive_help"], key="cfg_consecutive")
+    require_two_rest = st.sidebar.checkbox(t["two_day_rule"], value=False, help=t["two_day_help"], key="cfg_two_rest")
     
     # Holidays Selection
     num_days_in_month = calendar.monthrange(year, month)[1]
@@ -371,7 +401,7 @@ def main():
 
     if st.sidebar.button(t["load_tr_holidays"]):
         try:
-            tr_holidays = holidays.TR(years=year)
+            tr_holidays = holidays_lib.TR(years=year)
             month_holidays = [d.strftime("%Y-%m-%d") for d in tr_holidays if d.month == month]
             st.session_state["holidays_multiselect"] = month_holidays
             st.rerun()
@@ -410,6 +440,45 @@ def main():
                 if st.button("❌", key=f"del_rule_{i}"):
                     st.session_state.conditional_rules.pop(i)
                     st.rerun()
+
+    # --- Incompatible Pairs ---
+    st.sidebar.subheader(t["conflict_header"])
+    if 'forbidden_pairs' not in st.session_state:
+        st.session_state.forbidden_pairs = []
+        
+    # Get list of names
+    personnel_names = [p['name'] for p in st.session_state.get('personnel', [])]
+    
+    if len(personnel_names) >= 2:
+        c_c1, c_c2 = st.sidebar.columns(2)
+        with c_c1:
+            p1 = st.selectbox("Person 1", personnel_names, key="conf_p1", label_visibility="collapsed")
+        with c_c2:
+            p2 = st.selectbox("Person 2", personnel_names, key="conf_p2", label_visibility="collapsed")
+            
+        if st.sidebar.button(t["btn_add_conflict"]):
+            if p1 != p2:
+                pair = {'p1': p1, 'p2': p2}
+                # Check duplicates (order doesn't matter)
+                exists = any((x['p1'] == p1 and x['p2'] == p2) or (x['p1'] == p2 and x['p2'] == p1) for x in st.session_state.forbidden_pairs)
+                if not exists:
+                    st.session_state.forbidden_pairs.append(pair)
+                    st.rerun()
+                else:
+                    st.sidebar.warning("Pair already exists")
+            else:
+                st.sidebar.warning("Select different people")
+                
+    if st.session_state.forbidden_pairs:
+        st.sidebar.markdown("---")
+        for i, pair in enumerate(st.session_state.forbidden_pairs):
+            col_txt, col_del = st.sidebar.columns([4, 1])
+            with col_txt:
+                st.caption(t["conflict_desc"].format(pair['p1'], pair['p2']))
+            with col_del:
+                if st.button("❌", key=f"del_conf_{i}"):
+                    st.session_state.forbidden_pairs.pop(i)
+                    st.rerun()
     
     # Logout Button
     st.sidebar.markdown("---")
@@ -423,7 +492,22 @@ def main():
     st.header(t["header_personnel"])
     
     if 'personnel' not in st.session_state:
-        st.session_state.personnel = load_db(st.session_state.get('username'))
+        # Load full project state
+        db_data = load_db(st.session_state.get('username'))
+        st.session_state.personnel = db_data.get("personnel", [])
+        
+        # Restore other settings if available
+        if "conditional_rules" in db_data:
+            st.session_state.conditional_rules = db_data["conditional_rules"]
+        if "forbidden_pairs" in db_data:
+            st.session_state.forbidden_pairs = db_data["forbidden_pairs"]
+        if "holidays_multiselect" in db_data:
+            st.session_state.holidays_multiselect = db_data["holidays_multiselect"]
+            
+        # Restore config widgets (Streamlit handles this if we set the key in session_state)
+        for key in ["cfg_year", "cfg_month", "cfg_ppl", "cfg_gender", "cfg_consecutive", "cfg_two_rest"]:
+            if key in db_data:
+                st.session_state[key] = db_data[key]
 
     # Form to add new person
     with st.expander(t["add_expander"], expanded=True):
@@ -452,13 +536,27 @@ def main():
         with c_row2_2:
             off_dates = st.multiselect(t["off_dates"], date_options)
         with c_row2_3:
-            leave_dates = st.multiselect(t["leave_dates"], date_options)
+            leave_range = st.date_input(
+                t["leave_dates"],
+                value=[],
+                min_value=date(year, month, 1),
+                max_value=date(year, month, num_days)
+            )
         with c_row2_4:
             fixed_dates = st.multiselect(t["fixed_dates"], date_options)
             
         add_btn = st.button(t["add_btn"], use_container_width=True)
 
         if add_btn and name:
+            leave_dates = []
+            if leave_range:
+                start = leave_range[0]
+                end = leave_range[-1]
+                curr = start
+                while curr <= end:
+                    leave_dates.append(curr.strftime("%Y-%m-%d"))
+                    curr += timedelta(days=1)
+
             st.session_state.personnel.append({
                 "name": name,
                 "gender": gender,
@@ -540,7 +638,7 @@ def main():
                 st.success(t["db_saved"])
 
         with c_json:
-            json_data = json.dumps(st.session_state.personnel, ensure_ascii=False, indent=4)
+            json_data = json.dumps(st.session_state.personnel, ensure_ascii=False, indent=4) # Keep download as just personnel for portability
             st.download_button(
                 label=t["download_db"],
                 data=json_data,
@@ -591,7 +689,8 @@ def main():
             'allow_consecutive': allow_consecutive,
             'conditional_rules': scheduler_rules,
             'require_two_rest_days': require_two_rest,
-            'holidays': selected_holidays
+            'holidays': selected_holidays,
+            'forbidden_pairs': st.session_state.forbidden_pairs
         }
 
         # Initialize Scheduler

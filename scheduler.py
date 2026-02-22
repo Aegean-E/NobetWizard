@@ -150,6 +150,15 @@ class DutyScheduler:
             for p in team:
                 if not p.get('mixed_gender_allowed', True):
                     return False
+
+        # Incompatible Pairs
+        # config['forbidden_pairs'] = [{'p1': 'NameA', 'p2': 'NameB'}, ...]
+        forbidden_pairs = self.config.get('forbidden_pairs', [])
+        if forbidden_pairs and len(team) > 1:
+            team_names = set(p['name'] for p in team)
+            for pair in forbidden_pairs:
+                if pair['p1'] in team_names and pair['p2'] in team_names:
+                    return False
                 
         return True
 

@@ -175,7 +175,7 @@ LANG_TEXT = {
         "fixed_total_help": "Hedef toplam nöbet. >0 ise Maks yerine geçer.",
         "fixed_wknd": "Sabit Haftasonu Nöbet",
         "fixed_wknd_help": "Hedef hafta sonu nöbet. >0 ise Maks H.Sonu yerine geçer.",
-        "max_wknd": "Maksimum Hafta Sonu Nöbeti Sayısı",
+        "max_wknd": "Maksimum Hafta Sonu Nöbeti",
         "mixed_ok": "Karma Nöbet Tutmaya Uygundur",
         "mixed_ok_help": "Kişi karma ekiplerde çalışamıyorsa işareti kaldırın",
         "busy_days": "Nöbet Tutamayacağı Günler",
@@ -1368,7 +1368,9 @@ def main():
                 stats.append({
                     t["name"]: p['name'],
                     t["col_assigned"]: p['duty_count'],
-                    t["type_wknd"]: p.get('weekend_duty_count', 0)
+                    t["type_wknd"]: p.get('weekend_duty_count', 0),
+                    t["short_days"][5]: p.get('saturday_duty_count', 0),
+                    t["short_days"][6]: p.get('sunday_duty_count', 0)
                 })
                 duty_counts.append(p['duty_count'])
             
@@ -1382,7 +1384,7 @@ def main():
             if stats:
                 # Chart
                 st.caption("Duty Distribution / Nöbet Dağılımı")
-                st.bar_chart(pd.DataFrame(stats).set_index(t["name"])[[t["col_assigned"], t["type_wknd"]]])
+                st.bar_chart(pd.DataFrame(stats).set_index(t["name"])[[t["col_assigned"], t["type_wknd"], t["short_days"][5], t["short_days"][6]]])
                 
                 st.divider()
                 

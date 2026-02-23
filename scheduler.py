@@ -137,6 +137,15 @@ class DutyScheduler:
                         if any(p['name'] == person['name'] for p in self.schedule[trigger_date]):
                             return False
 
+        # 10. Weekend Balance (Sat vs Sun)
+        # Ensure that a person doesn't accumulate too many Saturdays without Sundays and vice versa.
+        if current_date.weekday() == 5: # Saturday
+            if person.get('saturday_duty_count', 0) > person.get('sunday_duty_count', 0):
+                return False
+        elif current_date.weekday() == 6: # Sunday
+            if person.get('sunday_duty_count', 0) > person.get('saturday_duty_count', 0):
+                return False
+
         return True
 
     def check_team_constraints(self, team):
@@ -191,6 +200,8 @@ class DutyScheduler:
         for p in self.personnel:
             p['duty_count'] = 0
             p['weekend_duty_count'] = 0
+            p['saturday_duty_count'] = 0
+            p['sunday_duty_count'] = 0
 
         # Optimization: Find multiple valid schedules and pick the fairest one
         valid_solutions = []
@@ -204,6 +215,8 @@ class DutyScheduler:
             for p in self.personnel:
                 p['duty_count'] = 0
                 p['weekend_duty_count'] = 0
+                p['saturday_duty_count'] = 0
+                p['sunday_duty_count'] = 0
             
             success = True
             
@@ -275,6 +288,10 @@ class DutyScheduler:
                     p['duty_count'] += 1
                     if self.is_weekend(current_date):
                         p['weekend_duty_count'] += 1
+                        if current_date.weekday() == 5:
+                            p['saturday_duty_count'] += 1
+                        elif current_date.weekday() == 6:
+                            p['sunday_duty_count'] += 1
             
             if success:
                 # Calculate Fairness Score (Standard Deviation)
@@ -305,6 +322,8 @@ class DutyScheduler:
             for p in self.personnel:
                 p['duty_count'] = 0
                 p['weekend_duty_count'] = 0
+                p['saturday_duty_count'] = 0
+                p['sunday_duty_count'] = 0
                 
             for d, team in self.schedule.items():
                 for p_sched in team:
@@ -314,6 +333,10 @@ class DutyScheduler:
                             p_orig['duty_count'] += 1
                             if self.is_weekend(d):
                                 p_orig['weekend_duty_count'] += 1
+                                if d.weekday() == 5:
+                                    p_orig['saturday_duty_count'] = p_orig.get('saturday_duty_count', 0) + 1
+                                elif d.weekday() == 6:
+                                    p_orig['sunday_duty_count'] = p_orig.get('sunday_duty_count', 0) + 1
                             break
             
             return True, self.schedule, None

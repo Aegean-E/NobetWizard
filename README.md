@@ -150,6 +150,7 @@ NobetWizard/
 ├── .aikit/                  <- project memory: project, guidelines, decisions, ledger
 ├── .devcontainer/
 ├── .gitignore
+├── LICENSE
 ├── README.md
 ├── banner.jpg
 ├── main.py
@@ -164,3 +165,7 @@ NobetWizard/
 *   `scheduler.py`: The core algorithm for constraint satisfaction and schedule generation.
 *   `requirements.txt`: Python dependencies.
 *   `*_db.json`: Local storage for users and personnel data (used if Firestore is not configured).
+
+## 📜 License
+
+AGPLv3 - see [LICENSE](LICENSE).

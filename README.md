@@ -156,6 +156,7 @@ NobetWizard/
 ├── main.py
 ├── requirements.txt
 ├── scheduler.py
+├── storage.py               <- crash-safe local JSON writes
 └── tests/                   <- the project's own regression suite
 ```
 

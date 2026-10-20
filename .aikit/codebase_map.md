@@ -6,20 +6,21 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `4`
-- **Total Classes**: `2`
-- **Total Top-Level Functions**: `17`
-- **Total Class Methods**: `25`
-- **Total Source Lines**: `2047`
+- **Total Python Modules**: `6`
+- **Total Classes**: `3`
+- **Total Top-Level Functions**: `19`
+- **Total Class Methods**: `28`
+- **Total Source Lines**: `2147`
 
 ---
 
 ## 📦 Modules & Exported Symbols
 
 ### [`main.py`](main.py)
-**Size**: `1426` lines (`65060` bytes)
+**Size**: `1465` lines (`66521` bytes)
 
 **Functions:**
+- `def clear_user_state()` - *Drop every user-scoped key so the next login starts from a clean session.*
 - `def get_firestore_db()` - *Initialize Firestore Client from Streamlit Secrets*
 - `def get_user_db_path(username)`
 - `def load_db(username)`
@@ -60,6 +61,14 @@
 
 ---
 
+### [`storage.py`](storage.py)
+**Size**: `27` lines (`916` bytes)
+
+**Functions:**
+- `def atomic_write_json(path, data)` - *Write JSON without leaving a truncated file when the process dies mid-write.*
+
+---
+
 ### [`tests/__init__.py`](tests/__init__.py)
 **Size**: `0` lines (`0` bytes)
 
@@ -85,5 +94,16 @@
 **Functions:**
 - `def personnel(count)`
 - `def config(**overrides)`
+
+---
+
+### [`tests/test_storage.py`](tests/test_storage.py)
+**Size**: `34` lines (`1098` bytes)
+
+**Classes:**
+- `class AtomicWriteJsonTest`
+  - Method `.test_writes_and_overwrites_json()`
+  - Method `.test_leaves_no_temporary_files()`
+  - Method `.test_creates_missing_parent_directory()`
 
 ---

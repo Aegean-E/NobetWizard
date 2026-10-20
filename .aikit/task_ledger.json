@@ -5,7 +5,7 @@
     "last_phase": "phase 4",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1792508766.8767135
+    "updated_at": 1792509057.2177851
   },
   "checkpoints": [
     {
@@ -33,6 +33,16 @@
       "status": "in_progress",
       "timestamp": 1792508766.8767135,
       "timestamp_str": "2026-10-20 18:06:06"
+    },
+    {
+      "task_id": "review-fixes",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[milestone 2/5] User state is cleared on logout/login, edited rosters preserve runtime counters and invalidate stale schedules, stats tolerate missing names, and local JSON writes are atomic; checklists: passed (test, hygiene, guidelines, secrets)",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1792509057.2177851,
+      "timestamp_str": "2026-10-20 18:10:57"
     }
   ]
 }

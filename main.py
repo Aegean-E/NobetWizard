@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import date, timedelta
 import calendar
 from scheduler import DutyScheduler
+from storage import atomic_write_json
 import json
 import os
 import bcrypt
@@ -281,6 +282,28 @@ USER_DB_FILE = "users_db.json"
 DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 DAYS_TR = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
 
+# Everything below belongs to the logged-in user; it must not survive a logout.
+APP_STATE_KEYS = {
+    "personnel",
+    "conditional_rules",
+    "forbidden_pairs",
+    "holidays_multiselect",
+    "generated_schedule",
+    "schedule_success",
+    "gen_year",
+    "gen_month",
+    "personnel_editor",
+    "dl_fmt_top",
+}
+APP_STATE_PREFIXES = ("cfg_", "hist_", "tool_", "conf_")
+
+
+def clear_user_state():
+    """Drop every user-scoped key so the next login starts from a clean session."""
+    for key in list(st.session_state.keys()):
+        if key in APP_STATE_KEYS or key.startswith(APP_STATE_PREFIXES):
+            del st.session_state[key]
+
 def get_firestore_db():
     """Initialize Firestore Client from Streamlit Secrets"""
     if firestore is None:
@@ -360,9 +383,8 @@ def save_db(personnel, username):
         db.collection("personnel_data").document(username).set(state_data)
         return
 
-    # 2. Fallback to Local JSON
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(state_data, f, ensure_ascii=False, indent=4)
+    # 2. Fallback to Local JSON (atomic: a crash never leaves a truncated file)
+    atomic_write_json(path, state_data)
 
 def load_users():
     if os.path.exists(USER_DB_FILE):
@@ -371,8 +393,7 @@ def load_users():
     return {}
 
 def save_users(data):
-    with open(USER_DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    atomic_write_json(USER_DB_FILE, data)
 
 def make_hashes(password):
     # Generate a salt and hash the password
@@ -427,10 +448,9 @@ def login_page():
             time.sleep(1) # Artificial delay to slow down guessing scripts
             
             if authenticate(username, password):
+                clear_user_state()
                 st.session_state['logged_in'] = True
                 st.session_state['username'] = username
-                if 'personnel' in st.session_state:
-                    del st.session_state['personnel']
                 st.success(t["login_success"].format(username))
                 st.rerun()
             else:
@@ -591,6 +611,12 @@ def main():
     
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
+
+    # The logout button cannot delete widget keys after they were rendered in the same
+    # run, so the cleanup runs at the start of the next one.
+    if st.session_state.pop("pending_logout", False):
+        clear_user_state()
+        st.session_state['logged_in'] = False
         
     if not st.session_state['logged_in']:
         login_page()
@@ -652,9 +678,7 @@ def main():
 
     with col_logout:
         if st.button(t["logout"], key="btn_logout_top"):
-            st.session_state['logged_in'] = False
-            if 'personnel' in st.session_state:
-                del st.session_state['personnel']
+            st.session_state["pending_logout"] = True
             st.rerun()
 
     # --- Sidebar: Configuration ---
@@ -1026,8 +1050,22 @@ def main():
         
         for col in ["busy_days", "off_dates", "leave_dates", "fixed_dates"]:
             df_saved[col] = df_saved[col].apply(list_to_str)
-            
-        st.session_state.personnel = df_saved.to_dict('records')
+
+        records = df_saved.to_dict('records')
+        previous = st.session_state.personnel
+        # Keep runtime counters (Saturday/Sunday totals and any future fields) that are
+        # not editable columns, and match rows by position.
+        merged = []
+        for index, record in enumerate(records):
+            base = previous[index] if index < len(previous) else {}
+            merged.append({**base, **record})
+
+        # A removed or renamed person makes the stored schedule unrenderable in stats.
+        if [p.get('name') for p in previous] != [record.get('name') for record in merged]:
+            st.session_state.schedule_success = False
+            st.session_state.generated_schedule = {}
+
+        st.session_state.personnel = merged
 
     else:
         st.info(t["info_start"])
@@ -1395,7 +1433,8 @@ def main():
                     day_idx = d.weekday()
                     day_name = t["short_days"][day_idx]
                     for p in team:
-                        day_counts[p['name']][day_name] += 1
+                        if p['name'] in day_counts:
+                            day_counts[p['name']][day_name] += 1
                 
                 df_days = pd.DataFrame(day_counts).T
                 st.dataframe(df_days.style.background_gradient(cmap="Blues", axis=1), use_container_width=True)
@@ -1406,7 +1445,7 @@ def main():
                 if len(names) > 0:
                     co_matrix = pd.DataFrame(0, index=names, columns=names)
                     for team in schedule.values():
-                        t_names = [p['name'] for p in team]
+                        t_names = [p['name'] for p in team if p['name'] in co_matrix.index]
                         for i in range(len(t_names)):
                             for j in range(i + 1, len(t_names)):
                                 p1, p2 = t_names[i], t_names[j]

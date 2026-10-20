@@ -4,6 +4,8 @@ from datetime import date, timedelta
 import calendar
 from scheduler import DutyScheduler
 from storage import atomic_write_json
+import html
+import hmac
 import json
 import os
 import bcrypt
@@ -101,6 +103,9 @@ LANG_TEXT = {
         "register_tab": "Register",
         "username": "Username",
         "password": "Password",
+        "err_username": "Username must be 3-20 characters and contain only letters, numbers, - or _.",
+        "err_password_short": "Password must be at least 8 characters long.",
+        "err_password_long": "Password must be at most 72 bytes long.",
         "login_btn": "Login",
         "register_btn": "Register",
         "logout": "Logout",
@@ -225,6 +230,9 @@ LANG_TEXT = {
         "register_tab": "Kayıt Ol",
         "username": "Kullanıcı Adı",
         "password": "Şifre",
+        "err_username": "Kullanıcı adı 3-20 karakter olmalı ve yalnızca harf, rakam, - veya _ içermelidir.",
+        "err_password_short": "Şifre en az 8 karakter olmalıdır.",
+        "err_password_long": "Şifre en fazla 72 bayt olmalıdır.",
         "login_btn": "Giriş Yap",
         "register_btn": "Kayıt Ol",
         "logout": "Çıkış",
@@ -281,6 +289,30 @@ LANG_TEXT = {
 USER_DB_FILE = "users_db.json"
 DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 DAYS_TR = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+GENDER_MODES = ["Any", "Mixed", "Single Gender"]
+
+
+def gender_label(lang, mode):
+    """Translate an internal gender mode without storing the display label."""
+    return LANG_TEXT[lang]["gender_opts"][GENDER_MODES.index(mode)]
+
+
+def normalize_gender_mode(value):
+    """Accept a stored internal mode or a legacy localized label."""
+    if value in GENDER_MODES:
+        return value
+    for texts in LANG_TEXT.values():
+        if value in texts["gender_opts"]:
+            return GENDER_MODES[texts["gender_opts"].index(value)]
+    return "Any"
+
+
+def get_secrets():
+    """st.secrets raises when no secrets file exists; an empty mapping keeps local runs working."""
+    try:
+        return st.secrets
+    except Exception:  # hygiene: allow a missing secrets file is a supported local configuration
+        return {}
 
 # Everything below belongs to the logged-in user; it must not survive a logout.
 APP_STATE_KEYS = {
@@ -309,10 +341,10 @@ def get_firestore_db():
     if firestore is None:
         return None
     
-    if "firebase" in st.secrets:
+    if "firebase" in get_secrets():
         try:
             # Construct credentials from secrets dictionary
-            key_dict = dict(st.secrets["firebase"])
+            key_dict = dict(get_secrets()["firebase"])
             creds = service_account.Credentials.from_service_account_info(key_dict)
             db = firestore.Client(credentials=creds, project=key_dict["project_id"])
             return db
@@ -400,10 +432,12 @@ def make_hashes(password):
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 def check_hashes(password, hashed_text):
+    if not isinstance(hashed_text, str) or not hashed_text:
+        return False
     try:
         # Check the password against the stored hash
         return bcrypt.checkpw(password.encode(), hashed_text.encode())
-    except ValueError:
+    except (ValueError, TypeError):
         return False
 
 def authenticate(username, password):
@@ -422,9 +456,12 @@ def authenticate(username, password):
     
     # 2. Check Secrets (Fallback Admin - Plain text in secrets)
     # Useful if the local DB is wiped or empty
-    if hasattr(st, "secrets") and "admin" in st.secrets:
+    secrets = get_secrets()
+    if "admin" in secrets:
+        admin = secrets["admin"]
         try:
-            if username == st.secrets["admin"]["username"] and password == st.secrets["admin"]["password"]:
+            if (username == admin["username"]
+                    and hmac.compare_digest(str(password), str(admin["password"]))):
                 return True
         except KeyError:  # hygiene: allow admin secrets may omit one of the two keys; login falls through to False
             pass
@@ -462,11 +499,15 @@ def login_page():
         if st.button(t["register_btn"]):
             # 1. Input Validation
             if not re.match("^[a-zA-Z0-9_-]{3,20}$", new_user):
-                st.error("Username must be 3-20 characters and contain only letters, numbers, - or _")
+                st.error(t["err_username"])
                 return
             
             if len(new_pass) < 8:
-                st.error("Password must be at least 8 characters long.")
+                st.error(t["err_password_short"])
+                return
+
+            if len(new_pass.encode("utf-8")) > 72:
+                st.error(t["err_password_long"])
                 return
 
             # 1. Cloud Registration

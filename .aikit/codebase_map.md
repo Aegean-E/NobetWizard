@@ -8,18 +8,21 @@
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `6`
 - **Total Classes**: `3`
-- **Total Top-Level Functions**: `19`
+- **Total Top-Level Functions**: `22`
 - **Total Class Methods**: `28`
-- **Total Source Lines**: `2147`
+- **Total Source Lines**: `2188`
 
 ---
 
 ## 📦 Modules & Exported Symbols
 
 ### [`main.py`](main.py)
-**Size**: `1465` lines (`66521` bytes)
+**Size**: `1506` lines (`68067` bytes)
 
 **Functions:**
+- `def gender_label(lang, mode)` - *Translate an internal gender mode without storing the display label.*
+- `def normalize_gender_mode(value)` - *Accept a stored internal mode or a legacy localized label.*
+- `def get_secrets()` - *st.secrets raises when no secrets file exists; an empty mapping keeps local runs working.*
 - `def clear_user_state()` - *Drop every user-scoped key so the next login starts from a clean session.*
 - `def get_firestore_db()` - *Initialize Firestore Client from Streamlit Secrets*
 - `def get_user_db_path(username)`

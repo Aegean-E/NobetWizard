@@ -5,7 +5,7 @@
     "last_phase": "phase 4",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1792509057.2177851
+    "updated_at": 1792509476.0906348
   },
   "checkpoints": [
     {
@@ -43,6 +43,16 @@
       "status": "in_progress",
       "timestamp": 1792509057.2177851,
       "timestamp_str": "2026-10-20 18:10:57"
+    },
+    {
+      "task_id": "review-fixes",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[milestone 3/5] Registration input is validated (username shape, password length/bytes), admin secrets are compared in constant time, and missing secrets files fall back safely; checklists: passed (test, hygiene, guidelines, secrets)",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1792509476.0906348,
+      "timestamp_str": "2026-10-20 18:17:56"
     }
   ]
 }

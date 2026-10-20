@@ -1,6 +1,6 @@
 import calendar
 import random
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import statistics
 import copy
 
@@ -17,6 +17,9 @@ class DutyScheduler:
         self.days_in_month = calendar.monthrange(year, month)[1]
         self.schedule = {}  # Key: Date, Value: List of names
         self.errors = []
+        self._fixed_dates_by_person = {}
+        self._fixed_week_counts = {}
+        self._fixed_baseline = {}
 
     def is_weekend(self, d):
         # 5 = Saturday, 6 = Sunday
@@ -28,11 +31,123 @@ class DutyScheduler:
     def get_week_number(self, d):
         return d.isocalendar()[1]
 
+    def _split_dates(self, person, field):
+        raw = person.get(field, '')
+        if not raw:
+            return set()
+        if isinstance(raw, (list, tuple, set)):
+            return {str(item).strip() for item in raw if str(item).strip()}
+        return {item.strip() for item in str(raw).split(',') if item.strip()}
+
+    def _is_fixed_on(self, person_name, d):
+        return d in self._fixed_dates_by_person.get(person_name, set())
+
+    def _duties_in_week(self, person_name, week):
+        total = self._fixed_week_counts.get(person_name, {}).get(week, 0)
+        for d, team in self.schedule.items():
+            if self.get_week_number(d) != week:
+                continue
+            if self._is_fixed_on(person_name, d):
+                continue
+            if any(p['name'] == person_name for p in team):
+                total += 1
+        return total
+
+    def _reset_counters(self):
+        for p in self.personnel:
+            p['duty_count'] = 0
+            p['weekend_duty_count'] = 0
+            p['saturday_duty_count'] = 0
+            p['sunday_duty_count'] = 0
+
+    def _increment_fixed(self, person, d):
+        person['duty_count'] += 1
+        if self.is_weekend(d):
+            person['weekend_duty_count'] += 1
+            if d.weekday() == 5:
+                person['saturday_duty_count'] += 1
+            elif d.weekday() == 6:
+                person['sunday_duty_count'] += 1
+        week = self.get_week_number(d)
+        weeks = self._fixed_week_counts.setdefault(person['name'], {})
+        weeks[week] = weeks.get(week, 0) + 1
+
+    def _restore_baseline(self):
+        for p in self.personnel:
+            baseline = self._fixed_baseline.get(p['name'], {})
+            p['duty_count'] = baseline.get('duty_count', 0)
+            p['weekend_duty_count'] = baseline.get('weekend_duty_count', 0)
+            p['saturday_duty_count'] = baseline.get('saturday_duty_count', 0)
+            p['sunday_duty_count'] = baseline.get('sunday_duty_count', 0)
+
+    def _index_fixed_duties(self):
+        index = {}
+        for person in self.personnel:
+            dates = set()
+            for raw in self._split_dates(person, 'fixed_dates'):
+                try:
+                    parsed = datetime.strptime(raw, "%d/%m/%Y").date()
+                except ValueError:
+                    return None, (f"Fixed duty date '{raw}' for '{person['name']}' is not DD/MM/YYYY.")
+                if parsed.year == self.year and parsed.month == self.month:
+                    dates.add(parsed)
+            index[person['name']] = dates
+        return index, None
+
+    def _validate_fixed_duties(self):
+        """
+        Commit every fixed duty first: a fixed duty that breaks availability, rest,
+        weekly, max-duty or team rules is reported by name and date instead of being
+        forced into the roster (it used to bypass every constraint).
+        """
+        self.schedule = {}
+        self._reset_counters()
+        self._fixed_week_counts = {}
+        people_per_day = self.config['people_per_day']
+        by_day = {}
+        for name, dates in self._fixed_dates_by_person.items():
+            for d in dates:
+                by_day.setdefault(d, []).append(name)
+
+        for day in range(1, self.days_in_month + 1):
+            d = date(self.year, self.month, day)
+            names = by_day.get(d)
+            if not names:
+                continue
+            if len(names) > people_per_day:
+                return (f"Fixed duties on {d.strftime('%d/%m/%Y')} assign {len(names)} people; "
+                        f"at most {people_per_day} per day are allowed.")
+            team = []
+            for name in names:
+                person = next(p for p in self.personnel if p['name'] == name)
+                if not self.check_constraints(person, d, team):
+                    return (f"Fixed duty for '{name}' on {d.strftime('%d/%m/%Y')} violates "
+                            "availability, rest, weekly or max-duty rules.")
+                team.append(person)
+            if len(team) == people_per_day and not self.check_team_constraints(team):
+                return (f"Fixed duties on {d.strftime('%d/%m/%Y')} violate gender, "
+                        "seniority or incompatible-pair rules.")
+            self.schedule[d] = team
+            for person in team:
+                self._increment_fixed(person, d)
+
+        self._fixed_baseline = {
+            p['name']: {
+                'duty_count': p['duty_count'],
+                'weekend_duty_count': p['weekend_duty_count'],
+                'saturday_duty_count': p['saturday_duty_count'],
+                'sunday_duty_count': p['sunday_duty_count'],
+            }
+            for p in self.personnel
+        }
+        self.schedule = {}
+        return None
+
     def check_constraints(self, person, current_date, current_team):
         # 1. Max Duties Total
         # If fixed_duties_total is set (>0), use it as the limit. Otherwise use max_duties.
         fixed_total = person.get('fixed_duties_total', 0)
-        limit_total = fixed_total if fixed_total > 0 else person['max_duties']
+        limit_total = fixed_total if fixed_total > 0 else person.get('max_duties', 0)
         
         if person['duty_count'] >= limit_total:
             return False
@@ -40,14 +155,16 @@ class DutyScheduler:
         # 2. Max Weekend Duties
         if self.is_weekend(current_date):
             fixed_wknd = person.get('fixed_duties_weekend', 0)
-            limit_wknd = fixed_wknd if fixed_wknd > 0 else person['max_weekends']
+            limit_wknd = fixed_wknd if fixed_wknd > 0 else person.get('max_weekends', 0)
             
             if person['weekend_duty_count'] >= limit_wknd:
                 return False
 
-        # 3. Consecutive Days (Yesterday)
-        # If they worked yesterday, they cannot work today (unless configured otherwise)
-        if not self.config.get('allow_consecutive', False):
+        allow_consecutive = self.config.get('allow_consecutive', False)
+        require_two_rest = self.config.get('require_two_rest_days', False)
+
+        # 3. Consecutive Days (Yesterday and tomorrow's fixed duty)
+        if not allow_consecutive:
             yesterday = current_date - timedelta(days=1)
             
             # Check current month history
@@ -58,42 +175,45 @@ class DutyScheduler:
             elif current_date.day == 1:
                 if person['name'] in self.config.get('history', {}).get('prev_1', []):
                     return False
-            
-            # New Rule: 2 Days Rest (Prevent "Every Other Day" pattern)
-            if self.config.get('require_two_rest_days', False):
-                day_before = current_date - timedelta(days=2)
-                
-                # Check current month
-                if day_before in self.schedule:
-                    if any(p['name'] == person['name'] for p in self.schedule[day_before]):
-                        return False
-                # Check previous month history
-                elif current_date.day == 1:
-                    if person['name'] in self.config.get('history', {}).get('prev_2', []):
-                        return False
-                elif current_date.day == 2:
-                    # On day 2, day_before is day 0 (prev_1)
-                    if person['name'] in self.config.get('history', {}).get('prev_1', []):
-                        return False
 
-        # 4. Already in current team (cannot be added twice same day)
+            # A fixed duty tomorrow would also be a back-to-back assignment.
+            if self._is_fixed_on(person['name'], current_date + timedelta(days=1)):
+                return False
+
+        # 4. 2 Days Rest (independent of Allow Consecutive)
+        if require_two_rest:
+            day_before = current_date - timedelta(days=2)
+            
+            # Check current month
+            if day_before in self.schedule:
+                if any(p['name'] == person['name'] for p in self.schedule[day_before]):
+                    return False
+            # Check previous month history
+            elif current_date.day == 1:
+                if person['name'] in self.config.get('history', {}).get('prev_2', []):
+                    return False
+            elif current_date.day == 2:
+                # On day 2, day_before is day 0 (prev_1)
+                if person['name'] in self.config.get('history', {}).get('prev_1', []):
+                    return False
+
+            # A fixed duty two days ahead would break the rest window.
+            if self._is_fixed_on(person['name'], current_date + timedelta(days=2)):
+                return False
+
+        # 5. Already in current team (cannot be added twice same day)
         if any(p['name'] == person['name'] for p in current_team):
             return False
 
-        # 5. Weekly Constraint (Simple version: Max 2 per week to prevent burnout)
-        # This addresses "if x day then y day" by ensuring they don't hold too many in one week
+        # 6. Weekly Constraint (Mon-Sun; fixed duties are reserved up front)
         current_week = self.get_week_number(current_date)
-        duties_this_week = 0
-        for d, team in self.schedule.items():
-            if self.get_week_number(d) == current_week:
-                if any(p['name'] == person['name'] for p in team):
-                    duties_this_week += 1
+        duties_this_week = self._duties_in_week(person['name'], current_week)
         
         # Configurable limit (Default 3)
         if duties_this_week >= self.config.get('max_weekly_duties', 3):
             return False
 
-        # 6. Busy Days (Day of Week constraint)
+        # 7. Busy Days (Day of Week constraint)
         # Checks if the person has blocked this specific day of the week (e.g., "Monday")
         busy_str = person.get('busy_days', '')
         if busy_str:
@@ -127,9 +247,8 @@ class DutyScheduler:
                 
                 # Only check if today is the forbidden day
                 if current_weekday == forbidden_day:
-                    # Calculate the date of the trigger day in the current week
-                    # trigger_date = current_date - (current_weekday - trigger_day)
-                    days_diff = current_weekday - trigger_day
+                    # Walk back to this week's trigger day, wrapping across weeks
+                    days_diff = (current_weekday - trigger_day) % 7
                     trigger_date = current_date - timedelta(days=days_diff)
                     
                     # Check if person worked on trigger_date
@@ -159,9 +278,8 @@ class DutyScheduler:
         is_mixed = 'M' in genders and 'F' in genders
         
         if mode == 'Mixed':
-            # If team is full, must have both genders. 
-            # If not full, we just continue building.
-            if len(team) == self.config['people_per_day']:
+            # A one-person shift can never contain both genders.
+            if len(team) == self.config['people_per_day'] and self.config['people_per_day'] > 1:
                 if not is_mixed:
                     return False
         
@@ -196,12 +314,15 @@ class DutyScheduler:
         return True
 
     def generate(self):
-        # Reset counts
-        for p in self.personnel:
-            p['duty_count'] = 0
-            p['weekend_duty_count'] = 0
-            p['saturday_duty_count'] = 0
-            p['sunday_duty_count'] = 0
+        # Fixed duties are validated and reserved before the randomized fill so they
+        # cannot bypass availability, rest, weekly, max-duty or team rules.
+        index, index_error = self._index_fixed_duties()
+        if index_error:
+            return False, {}, index_error
+        self._fixed_dates_by_person = index
+        fixed_error = self._validate_fixed_duties()
+        if fixed_error:
+            return False, {}, fixed_error
 
         # Optimization: Find multiple valid schedules and pick the fairest one
         valid_solutions = []
@@ -211,12 +332,8 @@ class DutyScheduler:
 
         for attempt in range(max_attempts):
             self.schedule = {}
-            # Reset temp counts for this attempt
-            for p in self.personnel:
-                p['duty_count'] = 0
-                p['weekend_duty_count'] = 0
-                p['saturday_duty_count'] = 0
-                p['sunday_duty_count'] = 0
+            # Fixed duties are already counted; restore that baseline for this attempt
+            self._restore_baseline()
             
             success = True
             
@@ -227,10 +344,9 @@ class DutyScheduler:
                 needed_count = self.config['people_per_day']
                 day_team = []
                 
-                # 1. Handle Fixed Duties (Priority Assignment)
+                # 1. Handle Fixed Duties (validated up front)
                 for p in self.personnel:
-                    f_dates = [d.strip() for d in p.get('fixed_dates', '').split(',') if d.strip()]
-                    if current_date_str in f_dates:
+                    if self._is_fixed_on(p['name'], current_date):
                         day_team.append(p)
                 
                 # Shuffle personnel to ensure randomness
@@ -282,9 +398,11 @@ class DutyScheduler:
                     last_error = f"Could not find enough eligible personnel for {current_date_str}. Found {len(day_team)}/{needed_count}."
                     break
                 
-                # Commit day
+                # Commit day (fixed duties already sit in the baseline counts)
                 self.schedule[current_date] = day_team
                 for p in day_team:
+                    if self._is_fixed_on(p['name'], current_date):
+                        continue
                     p['duty_count'] += 1
                     if self.is_weekend(current_date):
                         p['weekend_duty_count'] += 1

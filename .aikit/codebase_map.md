@@ -9,8 +9,8 @@
 - **Total Python Modules**: `4`
 - **Total Classes**: `2`
 - **Total Top-Level Functions**: `17`
-- **Total Class Methods**: `10`
-- **Total Source Lines**: `1847`
+- **Total Class Methods**: `25`
+- **Total Source Lines**: `2047`
 
 ---
 
@@ -39,13 +39,21 @@
 ---
 
 ### [`scheduler.py`](scheduler.py)
-**Size**: `344` lines (`15229` bytes)
+**Size**: `462` lines (`20267` bytes)
 
 **Classes:**
 - `class DutyScheduler`
   - Method `.__init__(year, month, personnel_list, config)` - *personnel_list: list of dicts [{'name': '...', 'gender': 'M/F', 'max_duties': 5, 'max_weekends': 2}]*
   - Method `.is_weekend(d)`
   - Method `.get_week_number(d)`
+  - Method `._split_dates(person, field)`
+  - Method `._is_fixed_on(person_name, d)`
+  - Method `._duties_in_week(person_name, week)`
+  - Method `._reset_counters()`
+  - Method `._increment_fixed(person, d)`
+  - Method `._restore_baseline()`
+  - Method `._index_fixed_duties()`
+  - Method `._validate_fixed_duties()` - *Commit every fixed duty first: a fixed duty that breaks availability, rest,*
   - Method `.check_constraints(person, current_date, current_team)`
   - Method `.check_team_constraints(team)`
   - Method `.generate()`
@@ -58,7 +66,7 @@
 ---
 
 ### [`tests/test_scheduler.py`](tests/test_scheduler.py)
-**Size**: `77` lines (`2406` bytes)
+**Size**: `159` lines (`5449` bytes)
 
 **Classes:**
 - `class DutySchedulerTest`
@@ -66,6 +74,13 @@
   - Method `.test_fixed_duty_is_assigned_on_its_date()`
   - Method `.test_busy_weekday_blocks_assignment()`
   - Method `.test_holiday_counts_as_weekend()`
+  - Method `.test_two_day_rest_applies_even_when_consecutive_is_allowed()`
+  - Method `.test_mixed_gender_allows_single_person_days()`
+  - Method `.test_conditional_rule_uses_previous_week_trigger()`
+  - Method `.test_fixed_duty_on_leave_is_reported()`
+  - Method `.test_fixed_duties_cannot_exceed_people_per_day()`
+  - Method `.test_fixed_duties_cannot_pair_incompatible_people()`
+  - Method `.test_fixed_duties_cannot_exceed_max_duties()`
 
 **Functions:**
 - `def personnel(count)`

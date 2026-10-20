@@ -1,5 +1,38 @@
 {
   "version": 1,
-  "active_task": null,
-  "checkpoints": []
+  "active_task": {
+    "task_id": "review-fixes",
+    "last_phase": "phase 4",
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1792508766.8767135
+  },
+  "checkpoints": [
+    {
+      "task_id": "review-fixes",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/5] Scheduler constraint correctness: validate fixed duties, independent 2-day rest, mixed single-person days, previous-week conditional rules",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1792508355.2084517,
+      "timestamp_str": "2026-10-20 17:59:15",
+      "impact_assessment": {
+        "why": "The scheduler can emit invalid rosters (fixed duties bypass all constraints, overfilled days) and silently ignore the 2-day rule and mixed mode in valid setups.",
+        "benefits": "Rosters honor every configured rule; failures explain the violating fixed duty instead of a generic random error.",
+        "risks": "contract: fixed duties that previously generated now fail loudly; dependency: none; concurrency: none; state: generation results change and existing saved schedules are unaffected",
+        "mitigation": "Failing-first tests for each case, existing suite kept, full gate run and review before commit."
+      }
+    },
+    {
+      "task_id": "review-fixes",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[milestone 1/5] Scheduler validates and reserves fixed duties, applies 2-day rest independently, supports mixed one-person shifts, and resolves conditional rules across weeks; checklists: passed (test, hygiene, guidelines, secrets)",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1792508766.8767135,
+      "timestamp_str": "2026-10-20 18:06:06"
+    }
+  ]
 }

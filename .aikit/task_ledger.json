@@ -5,7 +5,7 @@
     "last_phase": "phase 4",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1792509632.4232197
+    "updated_at": 1792509697.5245886
   },
   "checkpoints": [
     {
@@ -63,6 +63,16 @@
       "status": "in_progress",
       "timestamp": 1792509632.4232197,
       "timestamp_str": "2026-10-20 18:20:32"
+    },
+    {
+      "task_id": "review-fixes",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[milestone 5/5] iCalendar text is escaped against separator/newline injection, font downloads are timeout-bounded and atomic, and export helpers are unit-tested; checklists: passed (test, hygiene, guidelines, secrets)",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1792509697.5245886,
+      "timestamp_str": "2026-10-20 18:21:37"
     }
   ]
 }

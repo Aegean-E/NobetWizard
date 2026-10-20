@@ -153,6 +153,7 @@ NobetWizard/
 ├── LICENSE
 ├── README.md
 ├── banner.jpg
+├── exports.py               <- escaped iCalendar output and timed font downloads
 ├── main.py
 ├── requirements.txt
 ├── scheduler.py
@@ -165,6 +166,7 @@ NobetWizard/
 ## 📂 Project Structure
 
 *   `main.py`: The main application entry point and UI logic.
+*   `exports.py`: Escaped iCalendar generation and timeout-bounded font downloads.
 *   `scheduler.py`: The core algorithm for constraint satisfaction and schedule generation.
 *   `security.py`: Password hashing and constant-time credential comparison.
 *   `ui_helpers.py`: Pure presentation helpers, including language-independent gender labels and escaped calendar markup.

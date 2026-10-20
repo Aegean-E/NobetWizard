@@ -17,6 +17,13 @@ contract, a dependency, a data format or the architecture; IDs are consecutive a
 - **Decision**: Move language labels, calendar markup, password hashing and constant-time comparison into `ui_helpers.py` and `security.py`.
 - **Consequences**: These helpers are unit-testable with the standard library, while `main.py` keeps only orchestration and Streamlit-specific code.
 
+### ADR-003: Escape iCalendar text and time-box font downloads
+- **Date**: 2026-10-20
+- **Status**: Accepted
+- **Context**: Personnel names were interpolated into iCalendar properties without escaping, so commas, semicolons or newlines could corrupt or inject events; PDF font downloads had no timeout and could leave partial files.
+- **Decision**: Escape every iCalendar text value and download each font once through a 10-second timeout into a temporary file before replacing the target.
+- **Consequences**: Exported calendars stay well-formed for any name, and PDF generation fails over to built-in fonts instead of hanging on a slow network.
+
 <!-- Entry format:
 ### ADR-NNN: <decision in one line>
 - **Date**: YYYY-MM-DD

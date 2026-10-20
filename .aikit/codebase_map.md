@@ -6,18 +6,30 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `10`
-- **Total Classes**: `7`
-- **Total Top-Level Functions**: `23`
-- **Total Class Methods**: `37`
-- **Total Source Lines**: `2314`
+- **Total Python Modules**: `12`
+- **Total Classes**: `9`
+- **Total Top-Level Functions**: `25`
+- **Total Class Methods**: `41`
+- **Total Source Lines**: `2413`
 
 ---
 
 ## 📦 Modules & Exported Symbols
 
+### [`exports.py`](exports.py)
+> *Calendar export helpers that do not depend on the Streamlit UI.*
+
+**Size**: `61` lines (`1941` bytes)
+
+**Functions:**
+- `def escape_ics_text(value)` - *Escape a value so it cannot break out of an iCalendar text property.*
+- `def generate_ics(schedule, title)` - *Generate an iCalendar document for the schedule.*
+- `def download_font(url, path, timeout)` - *Download a font once, with a timeout and without leaving a partial file.*
+
+---
+
 ### [`main.py`](main.py)
-**Size**: `1443` lines (`65537` bytes)
+**Size**: `1421` lines (`64561` bytes)
 
 **Functions:**
 - `def get_secrets()` - *st.secrets raises when no secrets file exists; an empty mapping keeps local runs working.*
@@ -30,7 +42,6 @@
 - `def save_users(data)`
 - `def authenticate(username, password)`
 - `def login_page()`
-- `def generate_ics(schedule, title)` - *Generates an iCalendar string for the schedule.*
 - `def generate_excel(df_res)`
 - `def generate_pdf(df_res, year, month, t)`
 - `def main()`
@@ -81,6 +92,19 @@
 
 ### [`tests/__init__.py`](tests/__init__.py)
 **Size**: `0` lines (`0` bytes)
+
+---
+
+### [`tests/test_exports.py`](tests/test_exports.py)
+**Size**: `60` lines (`2046` bytes)
+
+**Classes:**
+- `class IcsEscapingTest`
+  - Method `.test_escapes_text_separators_and_newlines()`
+  - Method `.test_generated_event_escapes_personnel_names()`
+- `class DownloadFontTest`
+  - Method `.test_existing_font_is_not_downloaded()`
+  - Method `.test_download_uses_a_timeout_and_replaces_the_target()`
 
 ---
 

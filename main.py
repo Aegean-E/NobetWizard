@@ -4,6 +4,7 @@ from datetime import date, timedelta
 import calendar
 from scheduler import DutyScheduler
 from storage import atomic_write_json
+from exports import download_font, generate_ics
 from security import check_hashes, make_hashes, secure_equals
 from ui_helpers import GENDER_MODES, gender_label, get_calendar_html, normalize_gender_mode
 import json
@@ -15,7 +16,6 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-import urllib.request
 import holidays as holidays_lib
 import statistics
 import re
@@ -498,31 +498,6 @@ def login_page():
                     save_users(users)
                     st.success(t["reg_success"])
 
-def generate_ics(schedule, title="Duty Roster"):
-    """Generates an iCalendar string for the schedule."""
-    ics_content = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//NobetWizard//DutyRoster//EN",
-        "CALSCALE:GREGORIAN",
-        "METHOD:PUBLISH"
-    ]
-    
-    for d, team in schedule.items():
-        names = ", ".join([p['name'] for p in team])
-        dt_start = d.strftime("%Y%m%d")
-        dt_end = (d + timedelta(days=1)).strftime("%Y%m%d") # All day events end next day
-        
-        ics_content.append("BEGIN:VEVENT")
-        ics_content.append(f"DTSTART;VALUE=DATE:{dt_start}")
-        ics_content.append(f"DTEND;VALUE=DATE:{dt_end}")
-        ics_content.append(f"SUMMARY:{title}: {names}")
-        ics_content.append(f"DESCRIPTION:Team: {names}")
-        ics_content.append("END:VEVENT")
-        
-    ics_content.append("END:VCALENDAR")
-    return "\n".join(ics_content).encode('utf-8')
-
 def generate_excel(df_res):
     buffer_excel = BytesIO()
     with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
@@ -547,11 +522,14 @@ def generate_pdf(df_res, year, month, t):
         font_path_reg = "Roboto-Regular.ttf"
         font_path_bold = "Roboto-Bold.ttf"
         
-        if not os.path.exists(font_path_reg):
-            urllib.request.urlretrieve("https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Regular.ttf", font_path_reg)
-        
-        if not os.path.exists(font_path_bold):
-            urllib.request.urlretrieve("https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Bold.ttf", font_path_bold)
+        download_font(
+            "https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Regular.ttf",
+            font_path_reg,
+        )
+        download_font(
+            "https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Bold.ttf",
+            font_path_bold,
+        )
         
         pdfmetrics.registerFont(TTFont('Roboto', font_path_reg))
         pdfmetrics.registerFont(TTFont('Roboto-Bold', font_path_bold))

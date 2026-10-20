@@ -6,22 +6,20 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `6`
-- **Total Classes**: `3`
-- **Total Top-Level Functions**: `22`
-- **Total Class Methods**: `28`
-- **Total Source Lines**: `2188`
+- **Total Python Modules**: `10`
+- **Total Classes**: `7`
+- **Total Top-Level Functions**: `23`
+- **Total Class Methods**: `37`
+- **Total Source Lines**: `2314`
 
 ---
 
 ## 📦 Modules & Exported Symbols
 
 ### [`main.py`](main.py)
-**Size**: `1506` lines (`68067` bytes)
+**Size**: `1443` lines (`65537` bytes)
 
 **Functions:**
-- `def gender_label(lang, mode)` - *Translate an internal gender mode without storing the display label.*
-- `def normalize_gender_mode(value)` - *Accept a stored internal mode or a legacy localized label.*
 - `def get_secrets()` - *st.secrets raises when no secrets file exists; an empty mapping keeps local runs working.*
 - `def clear_user_state()` - *Drop every user-scoped key so the next login starts from a clean session.*
 - `def get_firestore_db()` - *Initialize Firestore Client from Streamlit Secrets*
@@ -30,11 +28,8 @@
 - `def save_db(personnel, username)`
 - `def load_users()`
 - `def save_users(data)`
-- `def make_hashes(password)`
-- `def check_hashes(password, hashed_text)`
 - `def authenticate(username, password)`
 - `def login_page()`
-- `def get_calendar_html(year, month, schedule, t)`
 - `def generate_ics(schedule, title)` - *Generates an iCalendar string for the schedule.*
 - `def generate_excel(df_res)`
 - `def generate_pdf(df_res, year, month, t)`
@@ -61,6 +56,18 @@
   - Method `.check_constraints(person, current_date, current_team)`
   - Method `.check_team_constraints(team)`
   - Method `.generate()`
+
+---
+
+### [`security.py`](security.py)
+> *Password and credential helpers kept free of UI dependencies.*
+
+**Size**: `31` lines (`909` bytes)
+
+**Functions:**
+- `def secure_equals(left, right)` - *Compare two values in constant time, including non-ASCII text.*
+- `def make_hashes(password)` - *Hash a password with bcrypt.*
+- `def check_hashes(password, hashed_text)` - *Return True only when the stored hash is a valid bcrypt hash matching the password.*
 
 ---
 
@@ -100,6 +107,18 @@
 
 ---
 
+### [`tests/test_security.py`](tests/test_security.py)
+**Size**: `25` lines (`824` bytes)
+
+**Classes:**
+- `class SecureEqualsTest`
+  - Method `.test_compares_ascii_and_unicode_text()`
+  - Method `.test_treats_missing_values_as_text()`
+- `class CheckHashesTest`
+  - Method `.test_rejects_missing_or_malformed_hashes()`
+
+---
+
 ### [`tests/test_storage.py`](tests/test_storage.py)
 **Size**: `34` lines (`1098` bytes)
 
@@ -108,5 +127,32 @@
   - Method `.test_writes_and_overwrites_json()`
   - Method `.test_leaves_no_temporary_files()`
   - Method `.test_creates_missing_parent_directory()`
+
+---
+
+### [`tests/test_ui_helpers.py`](tests/test_ui_helpers.py)
+**Size**: `49` lines (`1915` bytes)
+
+**Classes:**
+- `class GenderModeTest`
+  - Method `.test_internal_modes_are_unchanged()`
+  - Method `.test_legacy_localized_labels_normalize()`
+  - Method `.test_unknown_value_falls_back_to_any()`
+  - Method `.test_label_follows_the_selected_language()`
+- `class CalendarHtmlTest`
+  - Method `.test_personnel_names_are_html_escaped()`
+  - Method `.test_empty_cells_and_assignments_still_render()`
+
+---
+
+### [`ui_helpers.py`](ui_helpers.py)
+> *Pure presentation helpers shared by the Streamlit UI and the test suite.*
+
+**Size**: `84` lines (`3006` bytes)
+
+**Functions:**
+- `def gender_label(options, mode)` - *Return the localized label for an internal gender mode.*
+- `def normalize_gender_mode(value, option_sets)` - *Accept an internal mode or a legacy localized label from saved data.*
+- `def get_calendar_html(year, month, schedule, t)` - *Render the month grid, escaping every personnel name it embeds.*
 
 ---

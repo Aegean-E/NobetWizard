@@ -4,11 +4,10 @@ from datetime import date, timedelta
 import calendar
 from scheduler import DutyScheduler
 from storage import atomic_write_json
-import html
-import hmac
+from security import check_hashes, make_hashes, secure_equals
+from ui_helpers import GENDER_MODES, gender_label, get_calendar_html, normalize_gender_mode
 import json
 import os
-import bcrypt
 from io import BytesIO
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -289,22 +288,6 @@ LANG_TEXT = {
 USER_DB_FILE = "users_db.json"
 DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 DAYS_TR = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
-GENDER_MODES = ["Any", "Mixed", "Single Gender"]
-
-
-def gender_label(lang, mode):
-    """Translate an internal gender mode without storing the display label."""
-    return LANG_TEXT[lang]["gender_opts"][GENDER_MODES.index(mode)]
-
-
-def normalize_gender_mode(value):
-    """Accept a stored internal mode or a legacy localized label."""
-    if value in GENDER_MODES:
-        return value
-    for texts in LANG_TEXT.values():
-        if value in texts["gender_opts"]:
-            return GENDER_MODES[texts["gender_opts"].index(value)]
-    return "Any"
 
 
 def get_secrets():
@@ -427,19 +410,6 @@ def load_users():
 def save_users(data):
     atomic_write_json(USER_DB_FILE, data)
 
-def make_hashes(password):
-    # Generate a salt and hash the password
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-def check_hashes(password, hashed_text):
-    if not isinstance(hashed_text, str) or not hashed_text:
-        return False
-    try:
-        # Check the password against the stored hash
-        return bcrypt.checkpw(password.encode(), hashed_text.encode())
-    except (ValueError, TypeError):
-        return False
-
 def authenticate(username, password):
     # 1. Check Cloud DB
     db = get_firestore_db()
@@ -460,8 +430,7 @@ def authenticate(username, password):
     if "admin" in secrets:
         admin = secrets["admin"]
         try:
-            if (username == admin["username"]
-                    and hmac.compare_digest(str(password), str(admin["password"]))):
+            if username == admin["username"] and secure_equals(password, admin["password"]):
                 return True
         except KeyError:  # hygiene: allow admin secrets may omit one of the two keys; login falls through to False
             pass
@@ -528,39 +497,6 @@ def login_page():
                     users[new_user] = make_hashes(new_pass)
                     save_users(users)
                     st.success(t["reg_success"])
-
-def get_calendar_html(year, month, schedule, t):
-    cal = calendar.monthcalendar(year, month)
-    
-    # Header
-    # Use CSS variables for Dark Mode compatibility
-    headers = "".join([f"<th style='border:1px solid var(--text-color); padding:8px; background:var(--secondary-background-color); width:14%; color:var(--text-color);'>{day}</th>" for day in t["short_days"]])
-    
-    html = f"<table style='width:100%; border-collapse:collapse; table-layout: fixed;'><thead><tr>{headers}</tr></thead><tbody>"
-    
-    for week in cal:
-        html += "<tr>"
-        for day in week:
-            if day == 0:
-                html += "<td style='border:1px solid var(--text-color); background:var(--background-color); opacity:0.5;'></td>"
-            else:
-                current_date = date(year, month, day)
-                is_weekend = current_date.weekday() >= 5
-                bg_color = "var(--background-color)" if not is_weekend else "var(--secondary-background-color)"
-                
-                day_content = f"<div style='font-weight:bold; margin-bottom:5px; color:var(--text-color);'>{day}</div>"
-                
-                if current_date in schedule:
-                    team = schedule[current_date]
-                    for p in team:
-                        # Random pastel colors or fixed blue
-                        day_content += f"<div style='background:#e6f3ff; padding:2px 4px; margin-bottom:2px; border-radius:4px; font-size:11px; border:1px solid #cce5ff; color:#004085; font-weight:bold;'>{p['name']}</div>"
-                
-                html += f"<td style='border:1px solid var(--text-color); padding:5px; height:100px; vertical-align:top; background:{bg_color};'>{day_content}</td>"
-        html += "</tr>"
-    
-    html += "</tbody></table>"
-    return html
 
 def generate_ics(schedule, title="Duty Roster"):
     """Generates an iCalendar string for the schedule."""
@@ -743,16 +679,17 @@ def main():
         st.session_state.cfg_min_seniors = 0
     min_seniors = st.sidebar.number_input(t["min_seniors"], min_value=0, max_value=people_per_day, key="cfg_min_seniors")
     
-    # Map display options to internal logic keys
-    gender_map = {
-        t["gender_opts"][0]: "Any",
-        t["gender_opts"][1]: "Mixed",
-        t["gender_opts"][2]: "Single Gender"
-    }
-    
+    # Keep the stored mode language-independent; only the label changes with the language.
+    stored_gender = st.session_state.get("cfg_gender")
+    if stored_gender not in GENDER_MODES:
+        st.session_state.cfg_gender = normalize_gender_mode(
+            stored_gender, [texts["gender_opts"] for texts in LANG_TEXT.values()]
+        )
+
     gender_mode = st.sidebar.selectbox(
-        t["gender_rules"], 
-        t["gender_opts"],
+        t["gender_rules"],
+        GENDER_MODES,
+        format_func=lambda mode: gender_label(t["gender_opts"], mode),
         help=t["gender_help"],
         key="cfg_gender"
     )
@@ -1372,7 +1309,7 @@ def main():
             config = {
                 'people_per_day': people_per_day,
                 'min_seniors': min_seniors,
-                'gender_mode': gender_map[gender_mode],
+                'gender_mode': gender_mode,
                 'allow_consecutive': allow_consecutive,
                 'conditional_rules': scheduler_rules,
                 'max_weekly_duties': max_weekly,

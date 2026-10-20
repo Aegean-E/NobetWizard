@@ -156,7 +156,9 @@ NobetWizard/
 ├── main.py
 ├── requirements.txt
 ├── scheduler.py
+├── security.py              <- password hashing and constant-time credential checks
 ├── storage.py               <- crash-safe local JSON writes
+├── ui_helpers.py            <- language-independent labels and escaped calendar markup
 └── tests/                   <- the project's own regression suite
 ```
 
@@ -164,6 +166,8 @@ NobetWizard/
 
 *   `main.py`: The main application entry point and UI logic.
 *   `scheduler.py`: The core algorithm for constraint satisfaction and schedule generation.
+*   `security.py`: Password hashing and constant-time credential comparison.
+*   `ui_helpers.py`: Pure presentation helpers, including language-independent gender labels and escaped calendar markup.
 *   `requirements.txt`: Python dependencies.
 *   `*_db.json`: Local storage for users and personnel data (used if Firestore is not configured).
 

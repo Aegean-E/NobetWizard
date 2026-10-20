@@ -1,0 +1,8 @@
+streamlit
+pandas
+openpyxl
+reportlab
+holidays
+matplotlib
+google-cloud-firestore
+bcrypt

@@ -1,0 +1,15 @@
+# Ignore local database files (a broad *.json would hide .aikit/ memory)
+*_db.json
+personnel_db_*.json
+
+# Ignore Streamlit secrets
+.streamlit/secrets.toml
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+# AIKit transient state
+.aikit/*.lock
+.aikit/*.bak
+.aikit/*.tmp_*
+.aikit/*.corrupt_*

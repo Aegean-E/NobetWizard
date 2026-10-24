@@ -1,5 +1,7 @@
 # 🧙‍♂️ Nöbet Wizard (Duty Roster Generator)
 
+[![AIKit Integrated](https://img.shields.io/badge/AIKit-integrated-6f42c1)](https://github.com/Aegean-E/AIKit)
+
 <p align="center">
   <img src="https://github.com/Aegean-E/NobetWizard/blob/main/banner.jpg?raw=true" alt="Nöbet Wizard Banner" width="1200">
 </p>

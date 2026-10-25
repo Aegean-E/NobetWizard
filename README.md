@@ -154,6 +154,7 @@ NobetWizard/
 ├── .gitignore
 ├── LICENSE
 ├── README.md
+├── COMMERCIAL.md
 ├── banner.jpg
 ├── exports.py               <- escaped iCalendar output and timed font downloads
 ├── main.py

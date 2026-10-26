@@ -7,9 +7,9 @@
 </p>
 
 
-<p align="center">https://nobetwizard.streamlit.app/</p>
-
 **Nöbet Wizard** is a powerful, web-based application built with Python and Streamlit designed to automate the creation of monthly duty rosters (nöbet listesi). It handles complex constraints, personnel preferences, and fair distribution rules to generate optimal schedules in seconds.
+
+<p align="center">https://nobetwizard.streamlit.app/</p>
 
 ## 🌟 Features
 
@@ -177,8 +177,6 @@ NobetWizard/
 *   `ui_helpers.py`: Pure presentation helpers, including language-independent gender labels and escaped calendar markup.
 *   `requirements.txt`: Python dependencies.
 *   `*_db.json`: Local storage for users and personnel data (used if Firestore is not configured).
-
-> **License history:** versions up to and including `agpl-final` remain available under GNU AGPL-3.0.
 
 ## 📜 License
 

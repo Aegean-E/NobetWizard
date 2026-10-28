@@ -1,14 +1,13 @@
 # 🧙‍♂️ Nöbet Wizard (Duty Roster Generator)
 
 <!-- aegean:media:start -->
-<p align="center"><img src="assets/logo.jpg" alt="NobetWizard logo" width="96" height="96"></p>
-<p align="center"><img src="assets/social-preview.png" alt="NobetWizard social preview" width="100%"></p>
+<p align="center"><img src="assets/social-preview.jpg" alt="NobetWizard social preview" width="100%"></p>
+*Brand assets are generated and may not fully represent the project scope.*
 <!-- aegean:media:end -->
 
 [![AIKit Integrated](https://img.shields.io/badge/AIKit-integrated-6f42c1)](https://github.com/AegeanWorks/AIKit)
 
 <p align="center">
-  <img src="https://github.com/Aegean-E/NobetWizard/blob/main/banner.jpg?raw=true" alt="Nöbet Wizard Banner" width="1200">
 </p>
 
 

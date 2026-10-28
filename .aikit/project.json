@@ -3,5 +3,54 @@
   "name": "nobetwizard",
   "test_command": null,
   "gates": {},
-  "created": "2026-10-20"
+  "created": "2026-10-20",
+  "has_ui": true,
+  "ui_kind": "desktop",
+  "ui_evidence": [
+    "requirements.txt"
+  ],
+  "ui_checked_at": "2026-10-28",
+  "ui_source": "detected",
+  "topics": [
+    "aikit",
+    "automation",
+    "duty-roster",
+    "excel",
+    "pdf",
+    "python",
+    "scheduler",
+    "streamlit",
+    "turkish",
+    "shift-scheduling",
+    "source-available",
+    "aegeanworks",
+    "gui",
+    "productivity",
+    "software",
+    "user-interface",
+    "web-app",
+    "scheduling",
+    "workforce-management",
+    "constraint-solver"
+  ],
+  "topics_source": "ai:kilo:2026-10-27",
+  "topics_reviewed_at": "2026-10-28",
+  "topics_choice": [
+    "aegeanworks",
+    "software",
+    "web-app",
+    "user-interface",
+    "gui",
+    "productivity"
+  ],
+  "topics_choice_round2": [
+    "streamlit",
+    "excel",
+    "pdf",
+    "scheduling"
+  ],
+  "topics_choice_round3": [
+    "workforce-management",
+    "constraint-solver"
+  ]
 }

@@ -13,7 +13,9 @@
   "ui_source": "detected",
   "topics": [
     "aikit",
-    "automation",
+    "source-available",
+    "aegean-license",
+    "commercial-license",
     "duty-roster",
     "excel",
     "pdf",
@@ -22,16 +24,14 @@
     "streamlit",
     "turkish",
     "shift-scheduling",
-    "source-available",
     "aegeanworks",
     "gui",
     "productivity",
-    "software",
     "user-interface",
     "web-app",
     "scheduling",
-    "workforce-management",
-    "constraint-solver"
+    "constraint-solver",
+    "workforce-management"
   ],
   "topics_source": "ai:kilo:2026-10-27",
   "topics_reviewed_at": "2026-10-28",
@@ -52,5 +52,10 @@
   "topics_choice_round3": [
     "workforce-management",
     "constraint-solver"
+  ],
+  "license_topics": [
+    "source-available",
+    "aegean-license",
+    "commercial-license"
   ]
 }
